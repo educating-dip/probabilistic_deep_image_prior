@@ -1,0 +1,5 @@
+# @package _global_
+name: mnist
+noise_specs:
+  noise_type: white
+  stddev: 0.05

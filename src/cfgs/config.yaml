@@ -1,0 +1,4 @@
+defaults:
+  - data: mnist
+  - trafo: simple_ray_trafo
+seed: 1
