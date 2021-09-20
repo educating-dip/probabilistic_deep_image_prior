@@ -15,6 +15,7 @@ def coordinator(cfg : DictConfig) -> None:
     batchsize, (example_image, example_targets) = next(examples)
     observation, filtbackproj, example_image = simulate(example_image, ray_trafos, cfg.noise_specs)
 
+    # simple viz.
     import matplotlib.pyplot as plt
     fig, axs = plt.subplots(1, 3, figsize=(6, 6),  facecolor='w', edgecolor='k', constrained_layout=True)
     axs = axs.flatten()
@@ -25,7 +26,6 @@ def coordinator(cfg : DictConfig) -> None:
     axs[2].imshow(example_image[0, 0].numpy())
     axs[2].set_title('Image X')
     plt.show()
-
 
 if __name__ == '__main__':
     coordinator()
