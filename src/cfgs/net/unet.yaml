@@ -1,0 +1,17 @@
+# @package _group_
+arch:
+  scales: 3
+  channels: [32, 32, 32]
+  skip_channels: [0, 4, 4]
+  use_norm: True
+  use_sigmoid: True
+optim:
+  lr: 1e-4
+  iterations: 1000
+  loss_function: mse
+  gamma: 1e-4
+show_pbar: True
+torch_manual_seed: 10
+log_path: ./
+load_pretrain_model: False
+recon_from_randn: False

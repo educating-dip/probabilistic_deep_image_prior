@@ -1,4 +1,5 @@
 defaults:
   - data: mnist
   - trafo: simple_ray_trafo
+  - net: unet
 seed: 1

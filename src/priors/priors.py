@@ -4,13 +4,14 @@ import numpy as np
 import itertools
 from torch import linalg
 from torch.distributions.multivariate_normal import MultivariateNormal
+
 class RadialBasisFuncCov(nn.Module):
 
     def __init__(
         self,
         kernel_size,
         lengthscale_init,
-        precision_init,
+        variance_init,
         dist_func,
         ):
 
@@ -18,18 +19,18 @@ class RadialBasisFuncCov(nn.Module):
         self.kernel_size = kernel_size
         self.dist_mat = self.compute_dist_matrix(dist_func)
         self.log_lengthscale = nn.Parameter(torch.Tensor(1))
-        self.log_precision = nn.Parameter(torch.Tensor(1))
-        self._init_parameters(lengthscale_init, precision_init)
+        self.log_variance = nn.Parameter(torch.Tensor(1))
+        self._init_parameters(lengthscale_init, variance_init)
 
-    def _init_parameters(self, lengthscale_init, precision_init):
+    def _init_parameters(self, lengthscale_init, variance_init):
         nn.init.constant_(self.log_lengthscale,
                           np.log(lengthscale_init))
-        nn.init.constant_(self.log_precision, np.log(precision_init))
+        nn.init.constant_(self.log_variance, np.log(variance_init))
 
     def cov_mat(self, return_cholesky=True):
         lengthscale = torch.exp(self.log_lengthscale) + 1e-6
-        precision = torch.exp(self.log_precision) + 1e-6
-        cov_mat = precision * torch.exp(-self.dist_mat / lengthscale)
+        variance = torch.exp(self.log_variance) + 1e-6
+        cov_mat = variance * torch.exp(-self.dist_mat / lengthscale)
         return (linalg.cholesky(cov_mat) if return_cholesky else cov_mat)
 
     def compute_dist_matrix(self, dist_func):
@@ -42,11 +43,10 @@ class RadialBasisFuncCov(nn.Module):
         return dist_mat.view(self.kernel_size ** 2, self.kernel_size
                              ** 2)
 
-
-class MultiVariateGaussianPrior(nn.Module):
+class GPprior(nn.Module):
 
     def __init__(self, covariance_function):
-        super(MultiVariateGaussianPrior, self).__init__()
+        super(GPprior, self).__init__()
         self.cov = covariance_function
 
     def sample(self, shape):
@@ -64,10 +64,10 @@ if __name__ == '__main__':
     cov_kwards = {
         'kernel_size': 3,
         'lengthscale_init': 1,
-        'precision_init': 1,
+        'variance_init': 1,
         'dist_func': dist_func,
         }
     cov_func = RadialBasisFuncCov(**cov_kwards)
-    p = MultiVariateGaussianPrior(cov_func)
+    p = GPprior(cov_func)
     samples = p.sample(shape=[32, 3])
     print(samples.size())

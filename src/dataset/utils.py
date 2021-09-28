@@ -17,7 +17,8 @@ def load_testset_MNIST_dataset(path='mnist', batchsize=1,
                                 (0.1307,), (0.3081,))]))
     return DataLoader(testset, batchsize, shuffle=False)
 
-def get_standard_ray_trafos(cfg, return_torch_module=True):
+def get_standard_ray_trafos(cfg, return_torch_module=True,
+                            return_op_mat=False):
 
     half_size = cfg.size / 2
     space = odl.uniform_discr([-half_size, -half_size], [half_size,
@@ -27,13 +28,23 @@ def get_standard_ray_trafos(cfg, return_torch_module=True):
             num_angles=cfg.beam_num_angle)
     ray_trafo = odl.tomo.RayTransform(space, geometry)
     pseudoinverse = odl.tomo.fbp_op(ray_trafo)
-    if return_torch_module:
-        ray_trafo = OperatorModule(ray_trafo)
-        pseudoinverse = OperatorModule(pseudoinverse)
-
-    return {
+    ray_trafo_dict = {
         'space': space,
         'geometry': geometry,
         'ray_trafo': ray_trafo,
         'pseudoinverse': pseudoinverse,
         }
+
+    if return_torch_module:
+        ray_trafo_module = OperatorModule(ray_trafo)
+        ray_trafo_dict['ray_trafo_module'] = ray_trafo_module
+        pseudoinverse_module = OperatorModule(pseudoinverse)
+        ray_trafo_dict['pseudoinverse_module'] = pseudoinverse_module
+    if return_op_mat:
+        ray_trafo_mat = \
+            odl.operator.oputils.matrix_representation(ray_trafo)
+        ray_trafo_dict['ray_trafo_mat'] = ray_trafo_mat
+        ray_trafo_mat_adj = ray_trafo_mat.T
+        ray_trafo_dict['ray_trafo_mat_adj'] = ray_trafo_mat_adj
+
+    return ray_trafo_dict
