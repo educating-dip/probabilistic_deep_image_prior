@@ -3,6 +3,10 @@ import torch.nn as nn
 import numpy as np
 import itertools
 from torch import linalg
+try:
+    from torch.linalg import cholesky
+except:
+    from torch import cholesky
 from torch.distributions.multivariate_normal import MultivariateNormal
 
 class RadialBasisFuncCov(nn.Module):
@@ -31,7 +35,7 @@ class RadialBasisFuncCov(nn.Module):
         lengthscale = torch.exp(self.log_lengthscale) + 1e-6
         variance = torch.exp(self.log_variance) + 1e-6
         cov_mat = variance * torch.exp(-self.dist_mat / lengthscale)
-        return (linalg.cholesky(cov_mat) if return_cholesky else cov_mat)
+        return (cholesky(cov_mat) if return_cholesky else cov_mat)
 
     def compute_dist_matrix(self, dist_func):
         coords = [torch.as_tensor([i, j], dtype=torch.float32) for i in

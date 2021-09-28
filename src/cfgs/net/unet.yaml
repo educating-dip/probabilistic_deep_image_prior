@@ -7,7 +7,7 @@ arch:
   use_sigmoid: True
 optim:
   lr: 1e-4
-  iterations: 1000
+  iterations: 2000
   loss_function: mse
   gamma: 1e-4
 show_pbar: True

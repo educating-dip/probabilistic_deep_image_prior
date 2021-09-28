@@ -1,4 +1,3 @@
-import odl
 import hydra
 import torch
 import tqdm
@@ -79,7 +78,7 @@ def fig_subplots_wrapper(n_rows, n_cols, len_vec, samples_list, filename):
         im = ax.imshow(samples_list[i], vmin=minmin, vmax=maxmax, cmap='gray')
         ax.set_title('$\ell$: {:.4f}'.format(len_vec[i]), fontsize=10)
         ax.set_axis_off()
-    cbar = fig.colorbar(im, ax=axs.ravel().tolist(), shrink=0.95)
+    fig.colorbar(im, ax=axs.ravel().tolist(), shrink=0.95)
     fig.savefig(filename + '.pdf')
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -88,7 +87,7 @@ def coordinator(cfg : DictConfig) -> None:
     mnist_loader = load_testset_MNIST_dataset()
     ray_trafos = get_standard_ray_trafos(cfg)
     examples = enumerate(mnist_loader)
-    batchsize, (example_image, example_targets) = next(examples)
+    _, (example_image, _) = next(examples)
     observation, filtbackproj, example_image = simulate(example_image, ray_trafos, cfg.noise_specs)
     dip_ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'], 'reco_space': ray_trafos['space']}
     reconstructor = DeepImagePriorReconstructor(**dip_ray_trafo, cfg=cfg.net)
@@ -117,7 +116,7 @@ def coordinator(cfg : DictConfig) -> None:
                 cov_kwards = {
                     'kernel_size': kernel_size,
                     'lengthscale_init': lengthscale_init,
-                    'variance_init': get_mean_var_filter(block, norm_layers),
+                    'variance_init': get_average_var_group_filter(block, norm_layers),
                     'dist_func': dist_func,
                     }
                 cov_func = RadialBasisFuncCov(**cov_kwards)

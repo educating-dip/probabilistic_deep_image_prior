@@ -4,7 +4,6 @@ import os
 from dataset.utils import load_testset_MNIST_dataset, get_standard_ray_trafos
 from dataset.mnist import simulate
 from omegaconf import DictConfig
-import odl
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
