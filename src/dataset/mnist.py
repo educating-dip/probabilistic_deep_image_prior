@@ -2,6 +2,7 @@ import torch
 
 def simulate(x, ray_trafos, cfg, return_numpy=False):
 
+    x = (x - x.min()) / (x.max() - x.min())
     observation = ray_trafos['ray_trafo_module'](x)
     relative_stddev = torch.mean(torch.abs(observation))
     noisy_observation = observation \

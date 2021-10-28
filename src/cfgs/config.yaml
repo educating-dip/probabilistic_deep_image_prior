@@ -1,5 +1,6 @@
 defaults:
-  - data: mnist
+  - data: kmnist
   - trafo: simple_ray_trafo
   - net: unet
+  - mrglik: mrglik
 seed: 1

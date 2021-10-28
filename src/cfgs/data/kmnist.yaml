@@ -1,5 +1,5 @@
 # @package _global_
-name: mnist
+name: kmnist
 image_specs:
   size: 28
 noise_specs:

@@ -41,7 +41,8 @@ class UNet(nn.Module):
         x = xs[-1]
         for i in range(self.scales - 1):
             x = self.up[i](x, xs[-2 - i])
-        return torch.sigmoid(self.outc(x)) if self.use_sigmoid else self.outc(x)
+        out = self.outc(x)
+        return (torch.sigmoid(out), out) if self.use_sigmoid else (out, None)
 
 class DownBlock(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, num_groups=4, use_norm=True):

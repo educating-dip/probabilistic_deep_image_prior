@@ -17,6 +17,16 @@ def load_testset_MNIST_dataset(path='mnist', batchsize=1,
                                 (0.1307,), (0.3081,))]))
     return DataLoader(testset, batchsize, shuffle=False)
 
+def load_testset_KMNIST_dataset(path='kmnist', batchsize=1,
+                               crop=False):
+    path = os.path.join(get_original_cwd(), path)
+    testset = datasets.KMNIST(root=path, train=False, download=True,
+                             transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(
+                                (0.1307,), (0.3081,))]))
+    return DataLoader(testset, batchsize, shuffle=False)
+
 def get_standard_ray_trafos(cfg, return_torch_module=True,
                             return_op_mat=False):
 

@@ -1,0 +1,7 @@
+optim:
+  iterations: 200
+  lr: 0.01
+  include_predCP: True
+  scl_fct_gamma: None
+priors:
+  lengthscale_init: 0.05

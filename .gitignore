@@ -131,3 +131,5 @@ dmypy.json
 # folders
 outputs/
 mnist/
+kmnist/
+multirun/

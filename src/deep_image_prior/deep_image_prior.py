@@ -83,15 +83,17 @@ class DeepImagePriorReconstructor():
             criterion = MSELoss()
 
         best_loss = np.inf
-        best_output = self.model(self.net_input).detach()
+        best_output = self.model(self.net_input)[0].detach()
 
         with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar) as pbar:
             for i in pbar:
                 self.optimizer.zero_grad()
-                output = self.model(self.net_input)
+                output, pre_activation_output = self.model(self.net_input)[0], self.model(self.net_input)[1].detach()
                 loss = criterion(self.ray_trafo_module(output), y_delta) + self.cfg.optim.gamma * tv_loss(output)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
+                if loss.item() < best_loss:
+                    best_params_state_dict = self.model.state_dict()
                 self.optimizer.step()
 
                 for p in self.model.parameters():
@@ -100,6 +102,7 @@ class DeepImagePriorReconstructor():
                 if loss.item() < best_loss:
                     best_loss = loss.item()
                     best_output = output.detach()
+                    pre_activation_best_output = pre_activation_output
 
                 if ground_truth is not None:
                     best_output_psnr = PSNR(best_output.detach().cpu(), ground_truth.cpu())
@@ -112,9 +115,10 @@ class DeepImagePriorReconstructor():
                 if i % 1000 == 0:
                     self.writer.add_image('reco', normalize(best_output[0, ...]).cpu().numpy(), i)
 
+        self.model.load_state_dict(best_params_state_dict)
         self.writer.close()
-        out = best_output[0, 0, ...].cpu().numpy()
-        return out
+
+        return best_output[0, 0, ...].cpu().numpy(), pre_activation_best_output[0, 0, ...].cpu().numpy()
 
     def init_optimizer(self):
         """

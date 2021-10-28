@@ -1,13 +1,13 @@
 # @package _group_
 arch:
   scales: 3
-  channels: [32, 32, 32]
+  channels: [32, 32, 64]
   skip_channels: [0, 4, 4]
-  use_norm: True
+  use_norm: False
   use_sigmoid: True
 optim:
   lr: 1e-4
-  iterations: 2000
+  iterations: 3000
   loss_function: mse
   gamma: 1e-4
 show_pbar: True

@@ -110,28 +110,30 @@ def coordinator(cfg : DictConfig) -> None:
         with torch.no_grad():
             dist_func = lambda x: linalg.norm(x, ord=2) # setting GP cov dist func
             len_vec = np.logspace(-2, 2, 1000)
+            variance_init = get_average_var_group_filter(block, norm_layers)
             tv_samples_list, recon_samples_list, filter_samples_list = [], [], []
             for lengthscale_init in tqdm.tqdm(len_vec, leave=False):
                 kernel_size = 3 # we discard layers that have kernel_size of 1
                 cov_kwards = {
                     'kernel_size': kernel_size,
                     'lengthscale_init': lengthscale_init,
-                    'variance_init': get_average_var_group_filter(block, norm_layers),
+                    'variance_init': variance_init,
                     'dist_func': dist_func,
+                    'store_device': reconstructor.device
                     }
                 cov_func = RadialBasisFuncCov(**cov_kwards)
-                GPp = GPprior(cov_func)
+                GPp = GPprior(cov_func, reconstructor.device)
                 tv_samples = []
                 recon_samples = []
                 for _ in range(1000):
                     samples = GPp.sample(shape=[len_out//kernel_size**2])
                     set_all_weights(block, norm_layers, samples.flatten())
-                    recon = reconstructor.model.forward(filtbackproj)
+                    recon = reconstructor.model.forward(filtbackproj)[0]
                     tv_samples.append(tv_loss(recon).item())
                     recon_samples.append(recon.squeeze().detach().cpu().numpy())
                 tv_samples_list.append(tv_samples)
                 recon_samples_list.append(np.mean(np.asarray(recon_samples), axis=0))
-                filter_samples_list.append(samples[0].numpy())
+                filter_samples_list.append(samples[0].detach().cpu().numpy())
             set_all_weights(block, norm_layers, out) # reverting to map weights
             data = {
                     'tv_samples': np.asarray(tv_samples_list),
