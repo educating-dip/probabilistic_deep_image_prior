@@ -48,6 +48,8 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
     if return_torch_module:
         ray_trafo_module = OperatorModule(ray_trafo)
         ray_trafo_dict['ray_trafo_module'] = ray_trafo_module
+        ray_trafo_module_adj = OperatorModule(ray_trafo.adjoint)
+        ray_trafo_dict['ray_trafo_module_adj'] = ray_trafo_module_adj
         pseudoinverse_module = OperatorModule(pseudoinverse)
         ray_trafo_dict['pseudoinverse_module'] = pseudoinverse_module
     if return_op_mat:

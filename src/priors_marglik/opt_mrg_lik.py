@@ -1,9 +1,13 @@
+import os
+import socket
+import datetime
 import torch
 import numpy as np
 import torch.nn.functional as F
 import torch.autograd.functional as AF
 import torch.autograd as autograd
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 def marginal_lik_PredCP_update(
     cfg,
@@ -112,6 +116,15 @@ def optim_marginal_lik(
     store_device,
     ):
 
+
+    current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
+    comment = 'mrglik_opt'
+
+    logdir = os.path.join(
+        './',
+        current_time + '_' + socket.gethostname() + comment)
+
+    writer = SummaryWriter(log_dir=logdir)
     reconstructor.model.eval()
     optimizer = \
         torch.optim.Adam([{'params': block_priors.log_lengthscales},
@@ -133,6 +146,6 @@ def optim_marginal_lik(
             loss.backward()
             optimizer.step()
 
-            # for i in range(block_priors.num_params):
-            #     print(torch.exp(block_priors.log_lengthscales[i]))
-            #     print(torch.exp(block_priors.log_variances[i]))
+            for k in range(block_priors.num_params):
+                writer.add_scalar('lengthscale_{}'.format(k), torch.exp(block_priors.log_lengthscales[k]).item(), i)
+                writer.add_scalar('variance_{}'.format(k), torch.exp(block_priors.log_variances[k]).item(), i)

@@ -5,13 +5,13 @@ import time
 import numpy as np
 import torch.nn as nn
 from torch import linalg
-from torch.nn import DataParallel
 from omegaconf import DictConfig
 from dataset.mnist import simulate
 from dataset.utils import load_testset_MNIST_dataset, load_testset_KMNIST_dataset, get_standard_ray_trafos
 from deep_image_prior import DeepImagePriorReconstructor, list_norm_layers, tv_loss
 from priors_marglik import *
 from linearized_laplace import compute_jacobian_single_batch, est_lin_var, sigmoid_guassian_log_prob, sigmoid_gaussian_exp
+from linearized_weights import weights_linearization
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -36,6 +36,7 @@ def coordinator(cfg : DictConfig) -> None:
     cfg.mrglik.optim.scl_fct_gamma = observation.view(-1).shape[0]
     recon, recon_no_sigmoid = reconstructor.reconstruct(observation, filtbackproj, example_image)
 
+    weights_linearization(cfg, filtbackproj, observation, example_image, reconstructor, ray_trafos)
     # estimate lik-noise precision
     mode = 'sigmoid_exact' if cfg.net.arch.use_sigmoid else 'linear'
     noise_mat, noise_mat_inv, noise_mat_det = estimate_lik_noise(observation, filtbackproj, reconstructor, ray_trafos, mode=mode)
@@ -47,13 +48,13 @@ def coordinator(cfg : DictConfig) -> None:
     block_priors = BlocksGPpriors(reconstructor.model, reconstructor.device, cfg.mrglik.priors.lengthscale_init)
 
     # compute variance pre-marginal likelihood optimisation (lengthscale & marginal prior variance)
-    cov_diag_pre, cov_pre = est_lin_var(block_priors, Jac, noise_mat_inv, return_numpy=False)
-    log_lik = sigmoid_guassian_log_prob(example_image.flatten().to(reconstructor.device), torch.from_numpy(recon_no_sigmoid).flatten().to(reconstructor.device), cov_pre)
-    print('log_lik pre marginal likelihood optim: {}'.format(log_lik))
-
-    recon_with_uq = sigmoid_gaussian_exp(torch.from_numpy(recon_no_sigmoid).flatten().to(reconstructor.device), cov_pre)
-    mse = torch.mean((example_image[0, 0].flatten().to(reconstructor.device) - recon_with_uq.flatten())**2)
-    print(mse)
+    # cov_diag_pre, cov_pre = est_lin_var(block_priors, Jac, noise_mat_inv, return_numpy=False)
+    # log_lik = sigmoid_guassian_log_prob(example_image.flatten().to(reconstructor.device), torch.from_numpy(recon_no_sigmoid).flatten().to(reconstructor.device), cov_pre)
+    # print('log_lik pre marginal likelihood optim: {}'.format(log_lik))
+    #
+    # recon_with_uq = sigmoid_gaussian_exp(torch.from_numpy(recon_no_sigmoid).flatten().to(reconstructor.device), cov_pre)
+    # mse = torch.mean((example_image[0, 0].flatten().to(reconstructor.device) - recon_with_uq.flatten())**2)
+    # print(mse)
 
     optim_marginal_lik(cfg, reconstructor, filtbackproj, block_priors, Jac, noise_mat_det, noise_mat_inv, reconstructor.device)
 

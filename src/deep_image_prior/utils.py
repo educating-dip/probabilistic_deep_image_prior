@@ -1,6 +1,25 @@
 import torch
 import numpy as np
 from skimage.metrics import structural_similarity
+from torch.nn import DataParallel
+
+def set_all_weights(model, norm_layers, weights):
+    """ set all NN weights """
+    assert not isinstance(model, DataParallel)
+    n_weights_all = 0
+    for name, param in model.named_parameters():
+        if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
+            n_weights = param.numel()
+            param.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(param))
+            n_weights_all += n_weights
+
+def get_weight_vec(model, norm_layers):
+    ws = []
+    for name, param in model.named_parameters():
+        name = name.replace("module.", "")
+        if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
+            ws.append(param.flatten())
+    return torch.cat(ws)
 
 def list_norm_layers(model):
     """ compute list of names of all GroupNorm (or BatchNorm2d) layers in the model """

@@ -21,7 +21,6 @@ def compute_jacobian_single_batch(
             dim=0) if not return_on_cpu else torch.stack(jac,
             dim=0).cpu())
 
-
 def agregate_flatten_weight_grad(model, include_block=['down', 'up']):
 
     grads_o = []

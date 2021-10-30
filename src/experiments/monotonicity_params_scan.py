@@ -4,30 +4,12 @@ import tqdm
 import time
 import numpy as np
 from torch import linalg
-from torch.nn import DataParallel
 from omegaconf import DictConfig
 from dataset.mnist import simulate
 from dataset.utils import load_testset_MNIST_dataset, get_standard_ray_trafos
-from deep_image_prior import DeepImagePriorReconstructor, list_norm_layers, tv_loss
+from deep_image_prior import DeepImagePriorReconstructor, list_norm_layers,  set_all_weights, get_weight_vec, tv_loss
 from priors import *
 
-def set_all_weights(model, norm_layers, weights):
-    """ set all NN weights """
-    assert not isinstance(model, DataParallel)
-    n_weights_all = 0
-    for name, param in model.named_parameters():
-        if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
-            n_weights = param.numel()
-            param.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(param))
-            n_weights_all += n_weights
-
-def get_weight_vec(model, norm_layers):
-    ws = []
-    for name, param in model.named_parameters():
-        name = name.replace("module.", "")
-        if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
-            ws.append(param.flatten())
-    return torch.cat(ws)
 
 def get_average_var_group_filter(model, norm_layers):
     var = []
