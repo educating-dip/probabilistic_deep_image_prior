@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from skimage.metrics import structural_similarity
 from torch.nn import DataParallel
+from collections.abc import Iterable
 
 def set_all_weights(model, norm_layers, weights):
     """ set all NN weights """
@@ -12,6 +13,31 @@ def set_all_weights(model, norm_layers, weights):
             n_weights = param.numel()
             param.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(param))
             n_weights_all += n_weights
+
+def set_all_weights_block(model, weights, include_block=['down', 'up']):
+    """ set all NN weights """
+    assert not isinstance(model, DataParallel)
+    n_weights_all = 0
+    for sect_name in include_block:
+        group_blocks = getattr(model, sect_name)
+        if isinstance(group_blocks, Iterable):
+            for (k, block) in enumerate(group_blocks):
+                for layer in block.conv:
+                    if isinstance(layer, torch.nn.Conv2d):
+                        n_weights = layer.weight.numel()
+                        layer.weight.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(layer.weight))
+                        n_weights_all += n_weights
+
+def get_weight_block_vec(model, include_block=['down', 'up']):
+    ws = []
+    for sect_name in include_block:
+        group_blocks = getattr(model, sect_name)
+        if isinstance(group_blocks, Iterable):
+            for (k, block) in enumerate(group_blocks):
+                for layer in block.conv:
+                    if isinstance(layer, torch.nn.Conv2d):
+                        ws.append(layer.weight.flatten())
+    return torch.cat(ws)
 
 def get_weight_vec(model, norm_layers):
     ws = []
@@ -32,6 +58,14 @@ def list_norm_layers(model):
             norm_layers.append(name + '.weight')
             norm_layers.append(name + '.bias')
     return norm_layers
+
+def gaussian_log_prob(observation, proj_recon, sigma):
+
+    assert observation.shape == proj_recon.shape
+
+    dist = torch.distributions.Normal(loc=proj_recon, scale=sigma)
+
+    return dist.log_prob(observation).sum()
 
 def tv_loss(x):
     """

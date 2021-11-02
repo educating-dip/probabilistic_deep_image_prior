@@ -13,14 +13,15 @@ def require_grad_false(model):
 
 class BlocksGPpriors(nn.Module):
 
-    def __init__(self, model, store_device, lengthscale_init):
+    def __init__(self, model, store_device, lengthscale_init, lin_weights=None):
         super(BlocksGPpriors, self).__init__()
 
         self.model = require_grad_false(model)
         self.store_device = store_device
         self.lengthscale_init = lengthscale_init
-        self.num_mc_samples = 5
+        self.num_mc_samples = 3
         self.priors = torch.nn.ModuleList(self._assemble_block_priors())
+        self.lin_weights = lin_weights
         self.num_params = \
             len([param for param in self.priors.parameters() if param.requires_grad]) // 2
 
@@ -109,6 +110,27 @@ class BlocksGPpriors(nn.Module):
                         if isinstance(layer, torch.nn.Conv2d):
                             params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
                             log_prob += self.priors[k].GPp.log_prob(params).sum(dim=0)
+        return log_prob
+
+
+    def get_net_prior_log_prob_lin_weights(self, lin_weights):
+
+        model_sections = ['down', 'up']
+        mirror_blcks = []
+        n_weights_all = 0
+        log_prob = torch.zeros(1, device=self.store_device)
+        for sect_name in model_sections:
+            group_blocks = getattr(self.model, sect_name)
+            if isinstance(group_blocks, Iterable):
+                for k, block in enumerate(group_blocks):
+                    for layer in block.conv:
+                        if isinstance(layer, torch.nn.Conv2d):
+                            params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
+                            lin_weights = self.lin_weights[n_weights_all:n_weights_all + params.numel()]
+                            assert params.flatten().shape == lin_weights.shape
+                            lin_weights = lin_weights.view_as(params)
+                            n_weights_all += params.numel()
+                            log_prob += self.priors[k].GPp.log_prob(lin_weights).sum(dim=0)
         return log_prob
 
     def get_net_prior_cov_mat(self, ):

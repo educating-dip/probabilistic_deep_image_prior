@@ -4,20 +4,21 @@ import numpy as np
 
 def get_unet_model(in_ch=1, out_ch=1, scales=5, skip=4,
                    channels=(32, 32, 64, 64, 128, 128), use_sigmoid=True,
-                   use_norm=True):
+                   use_norm=True, sigmoid_saturation_thresh=-9):
     assert (1 <= scales <= 6)
     skip_channels = [0, 0, 0, 0, 4, 4]
     return UNet(in_ch=in_ch, out_ch=out_ch, channels=channels[:scales],
                 skip_channels=skip_channels, use_sigmoid=use_sigmoid,
-                use_norm=use_norm)
+                use_norm=use_norm, sigmoid_saturation_thresh=sigmoid_saturation_thresh)
 
 class UNet(nn.Module):
     def __init__(self, in_ch, out_ch, channels, skip_channels,
-                 use_sigmoid=True, use_norm=True):
+                 use_sigmoid=True, use_norm=True, sigmoid_saturation_thresh=9):
         super(UNet, self).__init__()
         assert (len(channels) == len(skip_channels))
         self.scales = len(channels)
         self.use_sigmoid = use_sigmoid
+        self.sigmoid_saturation_thresh = sigmoid_saturation_thresh
         self.down = nn.ModuleList()
         self.up = nn.ModuleList()
         self.inc = InBlock(in_ch, channels[0], use_norm=use_norm)
@@ -32,17 +33,20 @@ class UNet(nn.Module):
                                    use_norm=use_norm))
         self.outc = OutBlock(in_ch=channels[0],
                              out_ch=out_ch)
-
     def forward(self, x0):
 
-        xs = [self.inc(x0), ]
+        xs = [self.inc(x0)]
         for i in range(self.scales - 1):
             xs.append(self.down[i](xs[-1]))
         x = xs[-1]
         for i in range(self.scales - 1):
             x = self.up[i](x, xs[-2 - i])
         out = self.outc(x)
-        return (torch.sigmoid(out), out) if self.use_sigmoid else (out, None)
+        return (torch.sigmoid(out.clamp(min=-self.sigmoid_saturation_thresh,
+                max=self.sigmoid_saturation_thresh)),
+                out.clamp(min=-self.sigmoid_saturation_thresh,
+                max=self.sigmoid_saturation_thresh)) if self.use_sigmoid else (out,
+                out)
 
 class DownBlock(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, num_groups=4, use_norm=True):

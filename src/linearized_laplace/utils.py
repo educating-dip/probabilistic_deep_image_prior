@@ -2,16 +2,13 @@ import torch
 import numpy as np
 from copy import deepcopy
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
-
 def sigmoid_guassian_log_prob(
     X,
     mu,
-    Cov,
+    Cov = None,
+    noise_hess_inv = None,
     eps=1e-7,
-    thresh=-5,
+    thresh=-7,
     ):
     """
     Computes log-density of observations under Gaussian transofrmed
@@ -23,7 +20,6 @@ def sigmoid_guassian_log_prob(
     """
 
     assert mu.shape == X.shape
-    assert Cov.shape == (len(X), len(X))
 
     X = X.clone().clamp(min=eps, max=1 - eps)
     mu = mu.clone().clamp(min=thresh, max=-thresh)
@@ -32,16 +28,25 @@ def sigmoid_guassian_log_prob(
     Z = torch.log(X) - torch.log(1 - X)
     Z = Z.clone().clamp(min=thresh, max=-thresh)
 
+    if Cov is not None and noise_hess_inv is None:
+        covariance_matrix = Cov
+    elif noise_hess_inv is not None and Cov is None:
+        covariance_matrix = noise_hess_inv
+    elif Cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + Cov
+
     # compute gaussian density
     suceed = False
+    cnt = 0
     while not suceed:
         try:
-            dist = \
-                torch.distributions.multivariate_normal.MultivariateNormal(loc=mu,
-                    covariance_matrix=Cov)
+            dist = torch.distributions.multivariate_normal.MultivariateNormal(loc=mu, covariance_matrix=covariance_matrix)
             suceed = True
         except:
-            Cov[np.diag_indices(X.shape[0])] += 1e-4
+            covariance_matrix[np.diag_indices(X.shape[0])] += 1e-6
+            cnt += 1
+            assert cnt < 100
+
     log_prob = dist.log_prob(Z)
 
     # compute log-determinant of sigmoid transformation
@@ -51,11 +56,44 @@ def sigmoid_guassian_log_prob(
     return (log_prob + log_det.sum()) / X.shape[0]
 
 
+def guassian_log_prob(
+    X,
+    mu,
+    Cov = None,
+    noise_hess_inv = None
+    ):
+
+    assert mu.shape == X.shape
+
+    if Cov is not None and noise_hess_inv is None:
+        covariance_matrix = Cov
+    elif noise_hess_inv is not None and Cov is None:
+        covariance_matrix = noise_hess_inv
+    elif Cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + Cov
+
+    # compute gaussian density
+    suceed = False
+    cnt = 0
+    while not suceed:
+        try:
+            dist = torch.distributions.multivariate_normal.MultivariateNormal(loc=mu, covariance_matrix=covariance_matrix)
+            suceed = True
+        except:
+            covariance_matrix[np.diag_indices(X.shape[0])] += 1e-6
+            cnt += 1
+            assert cnt < 100
+
+    log_prob = dist.log_prob(X)
+
+    return log_prob / X.shape[0]
+
 def sigmoid_gaussian_exp(mu, Cov, num_samples=100):
 
     assert Cov.shape == (len(mu), len(mu))
 
     suceed = False
+    cnt = 0
     while not suceed:
         try:
             dist = \
@@ -63,7 +101,9 @@ def sigmoid_gaussian_exp(mu, Cov, num_samples=100):
                     covariance_matrix=Cov)
             suceed = True
         except:
-            Cov[np.diag_indices(mu.shape[0])] += 1e-4
+            Cov[np.diag_indices(mu.shape[0])] += 1e-6
+            cnt += 1
+            assert cnt < 100
     samples = dist.sample((num_samples, ))
 
     return torch.sigmoid(samples).mean(dim=0)

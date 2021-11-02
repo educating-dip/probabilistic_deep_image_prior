@@ -8,23 +8,15 @@ import torch.autograd as autograd
 from copy import deepcopy
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from deep_image_prior import tv_loss, list_norm_layers, set_all_weights, get_weight_vec, PSNR
-
-def get_weight_grad_vec(model, norm_layers):
-    ws = []
-    for name, param in model.named_parameters():
-        name = name.replace("module.", "")
-        if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
-            ws.append(param.grad.flatten())
-    return torch.cat(ws)
+from deep_image_prior import tv_loss, list_norm_layers, set_all_weights_block, get_weight_block_vec, PSNR
+from linearized_laplace import agregate_flatten_weight_grad
 
 def finite_diff_JvP(x, model, vec, eps=None):
 
     assert len(vec.shape) == 1
     model.eval()
     with torch.no_grad():
-        norm_layers = list_norm_layers(model)
-        map_weights = get_weight_vec(model, norm_layers)
+        map_weights = get_weight_block_vec(model)
 
         if eps is None:
             torch_eps = torch.finfo(vec.dtype).eps
@@ -33,17 +25,17 @@ def finite_diff_JvP(x, model, vec, eps=None):
             eps = np.sqrt(torch_eps) * (1 + w_map_max)  / v_max
 
         w_plus = map_weights.clone().detach() + vec * eps
-        set_all_weights(model, norm_layers, w_plus)
+        set_all_weights_block(model, w_plus)
         f_plus = model(x)[0]
         #         del w_plus
 
         w_minus = map_weights.clone().detach() - vec * eps
-        set_all_weights(model, norm_layers, w_minus)
+        set_all_weights_block(model, w_minus)
         f_minus = model(x)[0]
         #         del w_minus
 
         JvP = (f_plus - f_minus) / (2 * eps)
-        set_all_weights(model, norm_layers, map_weights)
+        set_all_weights_block(model, map_weights)
         return JvP
 
 def log_homoGauss_grad(mean, y, ray_trafo_module_adj, prec=1):
@@ -68,11 +60,12 @@ def tv_loss_grad(x):
 
 def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_trafos):
 
-    norm_layers = list_norm_layers(reconstructor.model)
-    map_weights = get_weight_vec(reconstructor.model, norm_layers)
+    map_weights = get_weight_block_vec(reconstructor.model)
     w_init = torch.zeros_like(map_weights)
-    ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)
-    ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
+    ray_trafo_module = ray_trafos['ray_trafo_module'
+                                  ].to(reconstructor.device)
+    ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'
+                                      ].to(reconstructor.device)
     observation = observation.to(reconstructor.device)
     ground_truth = ground_truth.to(reconstructor.device)
 
@@ -95,13 +88,18 @@ def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_
 
             # get projection vector
             lin_pred = finite_diff_JvP(x, reconstructor.model, lin_w_fd).detach()
-            loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred), observation.to(reconstructor.device)).detach() + cfg.net.optim.gamma * tv_loss(lin_pred)
-            v = log_homoGauss_grad(ray_trafo_module(lin_pred), observation, ray_trafo_module_adj).flatten() + cfg.net.optim.gamma * tv_loss_grad(lin_pred).flatten()
+            loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred),
+                                                observation.to(reconstructor.device)).detach() \
+                + cfg.net.optim.gamma * tv_loss(lin_pred)
+            v = log_homoGauss_grad(ray_trafo_module(lin_pred), observation,
+                                   ray_trafo_module_adj).flatten() \
+                + cfg.net.optim.gamma * tv_loss_grad(lin_pred).flatten()
             optimizer.zero_grad()
             reconstructor.model.zero_grad()
-            to_grad = (reconstructor.model(x)[0].flatten() * v)
+            to_grad = reconstructor.model(x)[0].flatten() * v
             to_grad.sum().backward()
-            lin_w_fd.grad = get_weight_grad_vec(reconstructor.model, norm_layers) + cfg.mrglik.linearized_weights.wd * lin_w_fd.detach() # take the weights
+            lin_w_fd.grad = agregate_flatten_weight_grad(reconstructor.model) \
+                + cfg.mrglik.linearized_weights.wd * lin_w_fd.detach()
             optimizer.step()
 
             loss_vec_fd.append(loss.detach().item())
@@ -109,6 +107,8 @@ def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_
             pbar.set_postfix({'psnr': psnr[-1]})
             writer.add_scalar('loss', loss_vec_fd[-1], i)
             writer.add_scalar('psnr', psnr[-1], i)
+
+    return lin_w_fd.detach(), lin_pred.detach()
 
 
 # def test_optim(reconstructor, filtbackproj, store_device):

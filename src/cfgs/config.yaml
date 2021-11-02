@@ -4,3 +4,4 @@ defaults:
   - net: unet
   - mrglik: mrglik
 seed: 1
+linearize_weights: False

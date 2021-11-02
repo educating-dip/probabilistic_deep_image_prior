@@ -42,6 +42,7 @@ class DeepImagePriorReconstructor():
             skip_channels=self.cfg.arch.skip_channels[:self.cfg.arch.scales],
             use_sigmoid=self.cfg.arch.use_sigmoid,
             use_norm=self.cfg.arch.use_norm,
+            sigmoid_saturation_thresh= self.cfg.arch.sigmoid_saturation_thresh
             ).to(self.device)
 
         current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
