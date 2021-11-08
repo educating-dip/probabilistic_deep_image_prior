@@ -1,3 +1,3 @@
 from .jac import compute_jacobian_single_batch, agregate_flatten_weight_grad
 from .lin_cov import compute_lin_pred_cov, compute_submatrix_lin_pred_cov
-from .utils import sigmoid_guassian_log_prob, sigmoid_gaussian_exp, guassian_log_prob
+from .utils import sigmoid_gaussian_flow_log_prob, sigmoid_gaussian_exp

@@ -8,7 +8,7 @@ from dataset.mnist import simulate
 from dataset.utils import load_testset_MNIST_dataset, load_testset_KMNIST_dataset, get_standard_ray_trafos
 from deep_image_prior import DeepImagePriorReconstructor
 from priors_marglik import *
-from linearized_laplace import compute_jacobian_single_batch, compute_lin_pred_cov, sigmoid_guassian_log_prob
+from linearized_laplace import compute_jacobian_single_batch, compute_lin_pred_cov, sigmoid_gaussian_flow_log_prob
 from linearized_weights import weights_linearization
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -48,8 +48,6 @@ def coordinator(cfg : DictConfig) -> None:
         # opt marginal likelihood (type-II)
         block_priors = BlocksGPpriors(reconstructor.model, reconstructor.device, cfg.mrglik.priors.lengthscale_init, lin_weights=lin_weights)
 
-        # compute variance pre-marginal likelihood optimisation (lengthscale & marginal prior variance)
-
         _, _, lik_hess_inv = optim_marginal_lik(
             cfg,
             observation,
@@ -64,14 +62,15 @@ def coordinator(cfg : DictConfig) -> None:
 
         (_, cov_post) = compute_lin_pred_cov(block_priors, Jac, lik_hess_inv)
 
-        log_lik_MLL_optim = \
-            sigmoid_guassian_log_prob(example_image.flatten().cuda(), torch.from_numpy(recon_no_sigmoid).flatten().cuda(),
+
+        log_lik_post_MLL_optim = \
+            sigmoid_gaussian_flow_log_prob(example_image.flatten(), torch.from_numpy(recon_no_sigmoid).flatten(),
                                       cov_post, lik_hess_inv)
 
-        log_lik_noise_model_MLL_var = sigmoid_guassian_log_prob(example_image.flatten().cuda(), torch.from_numpy(recon_no_sigmoid).flatten().cuda(),
+        log_lik_noise_model_MLL_var = sigmoid_gaussian_flow_log_prob(example_image.flatten(), torch.from_numpy(recon_no_sigmoid).flatten(),
                             None, lik_hess_inv)
 
-        print('test_log_lik post marginal likelihood optim: {}'.format(log_lik_MLL_optim))
+        print('test_log_lik post marginal likelihood optim: {}'.format(log_lik_post_MLL_optim))
 
         print('test_log_lik likelihood baseline (w optim lik_var): {}'.format(log_lik_noise_model_MLL_var))
 
@@ -98,14 +97,14 @@ def coordinator(cfg : DictConfig) -> None:
             compute_lin_pred_cov(block_priors, Jac, lik_hess_inv_no_PredCP)
 
         log_lik_no_PredCP = \
-            sigmoid_guassian_log_prob(example_image.flatten().cuda(), torch.from_numpy(recon_no_sigmoid).flatten().cuda(),
+            sigmoid_gaussian_flow_log_prob(example_image.flatten(), torch.from_numpy(recon_no_sigmoid).flatten().cuda(),
                                       cov_post_no_predCP, lik_hess_inv_no_PredCP)
 
         print('log_lik post marginal likelihood optim (no PredCP): {}'.format(log_lik_no_PredCP))
 
         dict = {'cfgs': cfg,
                     'test_log_lik':{
-                        'MLL_optim': log_lik_MLL_optim.item(),
+                        'MLL_optim': log_lik_post_MLL_optim.item(),
                         'log_lik_noise_model_MLL_var': log_lik_noise_model_MLL_var.item(),
                         'log_lik_no_PredCP': log_lik_no_PredCP.item()},
                 }

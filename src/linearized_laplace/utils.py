@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def sigmoid_guassian_log_prob(
+def sigmoid_gaussian_flow_log_prob(
     X,
     mu,
     cov = None,
@@ -55,7 +55,60 @@ def sigmoid_guassian_log_prob(
     return (log_prob + log_det.sum()) / X.shape[0]
 
 
-def guassian_log_prob(
+def sigmoid_gaussian_linearised_log_prob(
+    X,
+    mu,
+    Cov = None,
+    noise_hess_inv = None,
+    eps=1e-7,
+    thresh=-15,
+    ):
+    """
+    Pushes predictive Gaussian through sigmoid using local linearisation. Computes log-density in 0-1 space.
+    args:
+        X: observation in 0-1 space flattened
+        mu: mean prediction of Gauussian over activations flattened (in NN output space, pre-sigmoid)
+        Cov: covariance matrix of uncertainty over activations
+        thresh: maximum output of NN for clipping. Should keep large when using this method as it is more stable than exact method (sigmoid_gaussian_flow_log_prob).
+    """
+
+    assert mu.shape == X.shape
+    assert len(X.shape) == 1
+
+    X = X.clone().clamp(min=eps, max=1 - eps)
+    mu = mu.clone().clamp(min=thresh, max=-thresh)
+
+    sig_mu = torch.sigmoid(mu)
+    grad = (sig_mu * (1 - sig_mu)).diag()
+
+    if Cov is not None and noise_hess_inv is None:
+        covariance_matrix = Cov
+    elif noise_hess_inv is not None and Cov is None:
+        covariance_matrix = noise_hess_inv
+    elif Cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + Cov
+
+    # compute linearised variance in 0-1 space
+    covariance_matrix = grad @ covariance_matrix @ grad
+
+    # compute gaussian density
+    suceed = False
+    cnt = 0
+    while not suceed:
+        try:
+            dist = torch.distributions.multivariate_normal.MultivariateNormal(loc=mu, covariance_matrix=covariance_matrix)
+            suceed = True
+        except:
+            covariance_matrix[np.diag_indices(X.shape[0])] += 1e-6
+            cnt += 1
+            assert cnt < 100
+
+    log_prob = dist.log_prob(sig_mu)
+
+    return log_prob / X.shape[0]
+
+
+def gaussian_log_prob(
     X,
     mu,
     cov = None,
