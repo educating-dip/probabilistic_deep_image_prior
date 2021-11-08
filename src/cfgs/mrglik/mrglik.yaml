@@ -1,13 +1,13 @@
 optim:
-  iterations: 300
+  iterations: 1250
   lr: 0.01
   include_predCP: True
   gamma: 1e-4
   scl_fct_gamma: None
-  scaling_fct: 10
+  scaling_fct: 2
 priors:
-  lengthscale_init: 0.05
+  lengthscale_init: 0.1
 linearized_weights:
-  lr: 1e-4
+  lr: 5e-4
   wd: 1e-8
   iterations: 15000

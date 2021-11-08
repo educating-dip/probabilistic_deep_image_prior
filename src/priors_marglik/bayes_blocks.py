@@ -25,7 +25,7 @@ class BayesianiseBlock(nn.Module):
         cov_kwards = {
             'kernel_size': 3,
             'lengthscale_init': lengthscale_init,
-            'variance_init': self._get_average_var_group_filter(),
+            'variance_init': 1, # self._get_average_var_group_filter(),
             'dist_func': dist_func,
             'store_device': self.store_device,
             }

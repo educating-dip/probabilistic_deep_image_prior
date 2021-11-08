@@ -33,14 +33,14 @@ class RadialBasisFuncCov(nn.Module):
         nn.init.constant_(self.log_lengthscale,
                           np.log(lengthscale_init))
         nn.init.constant_(self.log_variance, np.log(variance_init))
-        # self.log_variance.requires_grad=False
 
     def cov_mat(self, return_cholesky=True, eps=1e-6):
 
         lengthscale = torch.exp(self.log_lengthscale)
         variance = torch.exp(self.log_variance)
-        cov_mat = variance * torch.exp(-self.dist_mat / lengthscale)
-        cov_mat[np.diag_indices(cov_mat.shape[0])] += eps
+        assert ( not torch.isnan(lengthscale) ) or ( not torch.isnan(variance) )
+        cov_mat = torch.exp(-self.dist_mat / lengthscale) + eps * torch.eye(*self.dist_mat.shape, device=self.store_device)
+        cov_mat = variance * cov_mat
         return (cholesky(cov_mat) if return_cholesky else cov_mat)
 
     def compute_dist_matrix(self, dist_func):

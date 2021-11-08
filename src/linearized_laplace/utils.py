@@ -1,11 +1,10 @@
 import torch
 import numpy as np
-from copy import deepcopy
 
 def sigmoid_guassian_log_prob(
     X,
     mu,
-    Cov = None,
+    cov = None,
     noise_hess_inv = None,
     eps=1e-7,
     thresh=-7,
@@ -28,12 +27,12 @@ def sigmoid_guassian_log_prob(
     Z = torch.log(X) - torch.log(1 - X)
     Z = Z.clone().clamp(min=thresh, max=-thresh)
 
-    if Cov is not None and noise_hess_inv is None:
-        covariance_matrix = Cov
-    elif noise_hess_inv is not None and Cov is None:
+    if cov is not None and noise_hess_inv is None:
+        covariance_matrix = cov
+    elif noise_hess_inv is not None and cov is None:
         covariance_matrix = noise_hess_inv
-    elif Cov is not None and noise_hess_inv is not None:
-        covariance_matrix = noise_hess_inv + Cov
+    elif cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + cov
 
     # compute gaussian density
     suceed = False
@@ -59,18 +58,18 @@ def sigmoid_guassian_log_prob(
 def guassian_log_prob(
     X,
     mu,
-    Cov = None,
+    cov = None,
     noise_hess_inv = None
     ):
 
     assert mu.shape == X.shape
 
-    if Cov is not None and noise_hess_inv is None:
-        covariance_matrix = Cov
-    elif noise_hess_inv is not None and Cov is None:
+    if cov is not None and noise_hess_inv is None:
+        covariance_matrix = cov
+    elif noise_hess_inv is not None and cov is None:
         covariance_matrix = noise_hess_inv
-    elif Cov is not None and noise_hess_inv is not None:
-        covariance_matrix = noise_hess_inv + Cov
+    elif cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + cov
 
     # compute gaussian density
     suceed = False
@@ -88,9 +87,9 @@ def guassian_log_prob(
 
     return log_prob / X.shape[0]
 
-def sigmoid_gaussian_exp(mu, Cov, num_samples=100):
+def sigmoid_gaussian_exp(mu, cov, num_samples=100):
 
-    assert Cov.shape == (len(mu), len(mu))
+    assert cov.shape == (len(mu), len(mu))
 
     suceed = False
     cnt = 0
@@ -98,10 +97,10 @@ def sigmoid_gaussian_exp(mu, Cov, num_samples=100):
         try:
             dist = \
                 torch.distributions.multivariate_normal.MultivariateNormal(loc=mu,
-                    covariance_matrix=Cov)
+                    covariance_matrix=cov)
             suceed = True
         except:
-            Cov[np.diag_indices(mu.shape[0])] += 1e-6
+            cov[np.diag_indices(mu.shape[0])] += 1e-6
             cnt += 1
             assert cnt < 100
     samples = dist.sample((num_samples, ))

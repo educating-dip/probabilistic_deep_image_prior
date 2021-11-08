@@ -19,7 +19,7 @@ class BlocksGPpriors(nn.Module):
         self.model = require_grad_false(model)
         self.store_device = store_device
         self.lengthscale_init = lengthscale_init
-        self.num_mc_samples = 3
+        self.num_mc_samples = 10
         self.priors = torch.nn.ModuleList(self._assemble_block_priors())
         self.lin_weights = lin_weights
         self.num_params = \
@@ -61,7 +61,7 @@ class BlocksGPpriors(nn.Module):
         for sect_name in model_sections:
             group_blocks = getattr(self.model, sect_name)
             if isinstance(group_blocks, Iterable):
-                for k, block in enumerate(group_blocks):
+                for k, _ in enumerate(group_blocks):
                     if sect_name  == 'down':
                         original_block = deepcopy(self.model.down[k])
                         self.model.down[k] = self.priors[i]
@@ -89,6 +89,23 @@ class BlocksGPpriors(nn.Module):
                 repeat += el.in_channels * el.out_channels
         return repeat
 
+    def get_idx_parameters_per_block(self):
+
+        model_sections = ['down', 'up']
+        n_weights_all = 0
+        list_idx = []
+        for sect_name in model_sections:
+            group_blocks = getattr(self.model, sect_name)
+            if isinstance(group_blocks, Iterable):
+                for _, block in enumerate(group_blocks): 
+                    n_weights_per_block = 0
+                    for layer in block.conv:
+                        if isinstance(layer, torch.nn.Conv2d):
+                            params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
+                            n_weights_per_block += params.numel()
+                    list_idx.append((n_weights_all, n_weights_all + n_weights_per_block))
+                    n_weights_all += n_weights_per_block
+        return list_idx
 
     def get_net_log_det_cov_mat(self, ):
 
@@ -100,29 +117,30 @@ class BlocksGPpriors(nn.Module):
     def get_net_prior_log_prob(self, ):
 
         model_sections = ['down', 'up']
-        mirror_blcks = []
         log_prob = torch.zeros(1, device=self.store_device)
+        i = 0 
         for sect_name in model_sections:
             group_blocks = getattr(self.model, sect_name)
             if isinstance(group_blocks, Iterable):
-                for k, block in enumerate(group_blocks):
+                for _, block in enumerate(group_blocks):
                     for layer in block.conv:
                         if isinstance(layer, torch.nn.Conv2d):
                             params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
-                            log_prob += self.priors[k].GPp.log_prob(params).sum(dim=0)
+                            log_prob += self.priors[i].GPp.log_prob(params).sum(dim=0)
+                    i += 1
         return log_prob
 
 
     def get_net_prior_log_prob_lin_weights(self, lin_weights):
 
         model_sections = ['down', 'up']
-        mirror_blcks = []
         n_weights_all = 0
+        i = 0
         log_prob = torch.zeros(1, device=self.store_device)
         for sect_name in model_sections:
             group_blocks = getattr(self.model, sect_name)
             if isinstance(group_blocks, Iterable):
-                for k, block in enumerate(group_blocks):
+                for _, block in enumerate(group_blocks):
                     for layer in block.conv:
                         if isinstance(layer, torch.nn.Conv2d):
                             params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
@@ -130,23 +148,31 @@ class BlocksGPpriors(nn.Module):
                             assert params.flatten().shape == lin_weights.shape
                             lin_weights = lin_weights.view_as(params)
                             n_weights_all += params.numel()
-                            log_prob += self.priors[k].GPp.log_prob(lin_weights).sum(dim=0)
+                            log_prob += self.priors[i].GPp.log_prob(lin_weights).sum(dim=0)
+                    i += 1 
         return log_prob
 
-    def get_net_prior_cov_mat(self, ):
+    def get_net_prior_cov_mat(self, idx=None):
 
         cov_blocks = []
-        for prior in self.priors:
-            cov_mat = prior.GPp.cov.cov_mat()
-            repeat_fct = self._get_repeat(prior)
+        priors = self.priors if idx is None else self.priors[idx]
+        if isinstance(priors, Iterable):  
+            for prior in priors:
+                cov_mat = prior.GPp.cov.cov_mat()
+                repeat_fct = self._get_repeat(prior)
+                for _ in range(repeat_fct):
+                    cov_blocks.append(cov_mat)
+            return torch.stack(cov_blocks)
+        else: 
+            cov_mat = priors.GPp.cov.cov_mat()
+            repeat_fct = self._get_repeat(priors)
             for _ in range(repeat_fct):
                 cov_blocks.append(cov_mat)
-        return torch.stack(cov_blocks)
+            return torch.stack(cov_blocks)
 
-    def matrix_prior_cov_mul(self, x):
-
+    def matrix_prior_cov_mul(self, x, idx=None):
         N = x.shape[0]
-        tensor_cov_mat = self.get_net_prior_cov_mat()
+        tensor_cov_mat = self.get_net_prior_cov_mat(idx=idx)
         x = x.view(-1, tensor_cov_mat.shape[0], tensor_cov_mat.shape[-1])
         x = x.permute(1, 0, 2)
         out = x @ tensor_cov_mat

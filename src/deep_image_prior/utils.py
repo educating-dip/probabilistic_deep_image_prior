@@ -63,9 +63,9 @@ def gaussian_log_prob(observation, proj_recon, sigma):
 
     assert observation.shape == proj_recon.shape
 
-    dist = torch.distributions.Normal(loc=proj_recon, scale=sigma)
+    dist = torch.distributions.Normal(loc=proj_recon.flatten(), scale=sigma)
 
-    return dist.log_prob(observation).sum()
+    return dist.log_prob(observation.flatten()).sum()
 
 def tv_loss(x):
     """

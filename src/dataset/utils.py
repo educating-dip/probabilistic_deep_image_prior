@@ -60,3 +60,14 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
         ray_trafo_dict['ray_trafo_mat_adj'] = ray_trafo_mat_adj
 
     return ray_trafo_dict
+
+
+def extract_tafo_as_matrix(ray_trafos): 
+
+    trafo = torch.from_numpy(ray_trafos['ray_trafo_mat'])
+    trafo = trafo.view(-1, ray_trafos['space'].shape[0]**2)
+    trafo_adj = trafo.t()
+    trafo_adj_trafo = trafo_adj @ trafo
+    trafo_trafo_adj = trafo @ trafo_adj
+
+    return trafo, trafo_adj, trafo_adj_trafo, trafo_trafo_adj
