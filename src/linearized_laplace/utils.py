@@ -58,7 +58,7 @@ def sigmoid_gaussian_flow_log_prob(
 def sigmoid_gaussian_linearised_log_prob(
     X,
     mu,
-    Cov = None,
+    cov = None,
     noise_hess_inv = None,
     eps=1e-7,
     thresh=-15,
@@ -81,12 +81,12 @@ def sigmoid_gaussian_linearised_log_prob(
     sig_mu = torch.sigmoid(mu)
     grad = (sig_mu * (1 - sig_mu)).diag()
 
-    if Cov is not None and noise_hess_inv is None:
-        covariance_matrix = Cov
-    elif noise_hess_inv is not None and Cov is None:
+    if cov is not None and noise_hess_inv is None:
+        covariance_matrix = cov
+    elif noise_hess_inv is not None and cov is None:
         covariance_matrix = noise_hess_inv
-    elif Cov is not None and noise_hess_inv is not None:
-        covariance_matrix = noise_hess_inv + Cov
+    elif cov is not None and noise_hess_inv is not None:
+        covariance_matrix = noise_hess_inv + cov
 
     # compute linearised variance in 0-1 space
     covariance_matrix = grad @ covariance_matrix @ grad
@@ -134,7 +134,7 @@ def gaussian_log_prob(
         except:
             covariance_matrix[np.diag_indices(X.shape[0])] += 1e-6
             cnt += 1
-            assert cnt < 100
+            assert cnt < 1000
 
     log_prob = dist.log_prob(X)
 

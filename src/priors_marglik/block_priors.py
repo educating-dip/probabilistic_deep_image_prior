@@ -19,7 +19,7 @@ class BlocksGPpriors(nn.Module):
         self.model = require_grad_false(model)
         self.store_device = store_device
         self.lengthscale_init = lengthscale_init
-        self.num_mc_samples = 10
+        self.num_mc_samples = 100
         self.priors = torch.nn.ModuleList(self._assemble_block_priors())
         self.lin_weights = lin_weights
         self.num_params = \
@@ -158,13 +158,13 @@ class BlocksGPpriors(nn.Module):
         priors = self.priors if idx is None else self.priors[idx]
         if isinstance(priors, Iterable):  
             for prior in priors:
-                cov_mat = prior.GPp.cov.cov_mat()
+                cov_mat = prior.GPp.cov.cov_mat(return_cholesky=False)
                 repeat_fct = self._get_repeat(prior)
                 for _ in range(repeat_fct):
                     cov_blocks.append(cov_mat)
             return torch.stack(cov_blocks)
         else: 
-            cov_mat = priors.GPp.cov.cov_mat()
+            cov_mat = priors.GPp.cov.cov_mat(return_cholesky=False)
             repeat_fct = self._get_repeat(priors)
             for _ in range(repeat_fct):
                 cov_blocks.append(cov_mat)

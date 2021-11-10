@@ -43,8 +43,7 @@ class UNet(nn.Module):
             x = self.up[i](x, xs[-2 - i])
         out = self.outc(x)
         return (torch.sigmoid(out.clamp(min=-self.sigmoid_saturation_thresh,
-                max=self.sigmoid_saturation_thresh)),
-                out.clamp(min=-self.sigmoid_saturation_thresh,
+                max=self.sigmoid_saturation_thresh)), out.clamp(min=-self.sigmoid_saturation_thresh,
                 max=self.sigmoid_saturation_thresh)) if self.use_sigmoid else (out,
                 out)
 
