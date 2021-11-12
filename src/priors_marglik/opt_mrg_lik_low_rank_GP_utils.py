@@ -38,7 +38,7 @@ def marginal_lik_PredCP_linear_update(
             assert cnt < 100
 
         samples = dist.rsample((100, ))
-        expected_tv.append(tv_loss(samples).mean(dim=0))
+        expected_tv.append(tv_loss(samples.view(-1, *recon.shape)).mean(dim=0))
 
     log_det_list = []
     for i in range(block_priors.num_params):

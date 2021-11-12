@@ -57,7 +57,7 @@ def coordinator(cfg : DictConfig) -> None:
                     filtbackproj, example_image)
 
                 torch.save(reconstructor.model.state_dict(),
-                     './reconstructor_model_{}.pt'.format(i))
+                        './reconstructor_model_{}.pt'.format(i))
 
                 lin_weights = None
                 if cfg.linearize_weights:
@@ -151,13 +151,13 @@ def coordinator(cfg : DictConfig) -> None:
 
 
                 print('test_log_lik marginal likelihood optim (no_PredCP): {}'\
-                    .format(test_log_lik_no_PredCP))
+                    .format(test_log_lik_no_PredCP), flush=True)
                 
                 print('test_log_lik likelihood baseline (unit var): {}'\
-                    .format(test_log_lik_noise_model_unit_var))
+                    .format(test_log_lik_noise_model_unit_var), flush=True)
 
                 print('test_log_lik likelihood baseline: {}'\
-                    .format(test_log_lik_noise_model))
+                    .format(test_log_lik_noise_model), flush=True)
 
                 # savings 
                 test_log_lik_no_PredCP_list.append(
@@ -212,7 +212,7 @@ def coordinator(cfg : DictConfig) -> None:
 
 
                 print('log_lik post marginal likelihood optim: {}'\
-                    .format(test_log_lik_w_PredCP))
+                    .format(test_log_lik_w_PredCP), flush=True)
 
                 test_log_lik_w_PredCP_list.append(test_log_lik_w_PredCP.item())
 
@@ -261,7 +261,8 @@ def coordinator(cfg : DictConfig) -> None:
                     np.std(test_log_lik_noise_model_list) / np.sqrt(cfg.num_images + 1),
                     np.mean(test_log_lik_w_PredCP_list),
                     np.std(test_log_lik_w_PredCP_list) / np.sqrt(cfg.num_images + 1)
-            ))
+            ), 
+            flush=True)
 
 if __name__ == '__main__':
 
