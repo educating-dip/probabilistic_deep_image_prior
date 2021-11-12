@@ -10,7 +10,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from deep_image_prior import gaussian_log_prob, tv_loss
 from dataset import extract_tafo_as_matrix
-from linearized_laplace import submatrix_low_rank_GP_lin_pred_cov_prior
+from linearized_laplace import submatrix_low_rank_GP_lin_model_prior_cov
 import tensorly as tl
 tl.set_backend('pytorch')
 
@@ -21,17 +21,19 @@ def marginal_lik_PredCP_linear_update(
     recon
     ):
 
-    _, list_prior_cov_pred = submatrix_low_rank_GP_lin_pred_cov_prior(block_priors, Jac_x)
+    _, list_model_prior_cov = submatrix_low_rank_GP_lin_model_prior_cov(block_priors, Jac_x)
     expected_tv = []
-    for cov in list_prior_cov_pred:
+    for cov in list_model_prior_cov:
         succed = False
         cnt = 0
         while not succed: 
             try: 
-                dist = torch.distributions.multivariate_normal.MultivariateNormal(loc=recon.flatten().to(block_priors.store_device), covariance_matrix=cov)
+                dist = \
+                    torch.distributions.multivariate_normal.MultivariateNormal(loc=recon.flatten().to(block_priors.store_device),
+                        covariance_matrix=cov)
                 succed = True 
             except: 
-                cov[np.diag_indices(cov.shape[0])] += 1e-4 #cov.diag().detach().mean() / 1000
+                cov[np.diag_indices(cov.shape[0])] += 1e-4 # cov.diag().detach().mean() / 1000
                 cnt += 1
             assert cnt < 100
 
@@ -69,7 +71,10 @@ def marginal_lik_PredCP_linear_update(
             * cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma \
             * cfg.mrglik.optim.gamma + second_derivative_log_variances )
     
-    loss =  cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma * torch.stack(expected_tv).sum().detach() - torch.stack(log_det_list).sum().detach()
+    loss = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma \
+        * cfg.mrglik.optim.gamma * torch.stack(expected_tv).sum().detach() \
+        - torch.stack(log_det_list).sum().detach()
+
     return loss
 
 def post_hess_log_det_y_space(

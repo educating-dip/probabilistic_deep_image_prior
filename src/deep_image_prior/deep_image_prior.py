@@ -7,8 +7,10 @@ import tensorboardX
 from torch.optim import Adam
 from torch.nn import MSELoss
 from tqdm import tqdm
+from warnings import warn 
 from .network import UNet
 from .utils import tv_loss, PSNR, normalize
+from copy import deepcopy
 
 class DeepImagePriorReconstructor():
     """
@@ -94,7 +96,7 @@ class DeepImagePriorReconstructor():
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
                 if loss.item() < best_loss:
-                    best_params_state_dict = self.model.state_dict()
+                    best_params_state_dict = deepcopy(self.model.state_dict())
                 self.optimizer.step()
 
                 for p in self.model.parameters():

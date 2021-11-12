@@ -5,3 +5,4 @@ defaults:
   - mrglik: mrglik
 seed: 1
 linearize_weights: False
+num_images: 9

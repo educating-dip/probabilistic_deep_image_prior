@@ -1,8 +1,8 @@
 optim:
-  iterations: 850
+  iterations: 1200
   lr: 0.01
   include_predCP: True
-  gamma: 1e-4
+  gamma: ${net.optim.gamma}
   scl_fct_gamma: None
   scaling_fct: 2
 priors:

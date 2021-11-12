@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def compute_lin_pred_cov(block_priors, Jac, noise_mat_inv):
+def lin_pred_cov(block_priors, Jac, noise_mat_inv):
 
     assert noise_mat_inv.diag().min() > 0
 
@@ -14,7 +14,7 @@ def compute_lin_pred_cov(block_priors, Jac, noise_mat_inv):
 
     return cov.diag(), cov
 
-def compute_submatrix_lin_pred_cov_prior(block_priors, Jac):
+def submatrix_lin_pred_cov_prior(block_priors, Jac):
 
     idx_list = block_priors.get_idx_parameters_per_block()
     cov_diag_list = []
@@ -35,7 +35,7 @@ def compute_submatrix_lin_pred_cov_prior(block_priors, Jac):
     return cov_diag_list, cov_list
 
 
-def low_rank_GP_lin_pred_cov(block_priors, Jac_x, Jac_y, noise_model_variance_y):
+def low_rank_GP_lin_model_post_pred_cov(block_priors, Jac_x, Jac_y, noise_model_variance_y):
 
     Kyy = block_priors.matrix_prior_cov_mul(Jac_y) @ Jac_y.transpose(1, 0)
     Kyy[np.diag_indices(Kyy.shape[0])] += noise_model_variance_y
@@ -51,7 +51,7 @@ def low_rank_GP_lin_pred_cov(block_priors, Jac_x, Jac_y, noise_model_variance_y)
     return cov.diag(), cov
 
 
-def submatrix_low_rank_GP_lin_pred_cov_prior(block_priors, Jac_x):
+def submatrix_low_rank_GP_lin_model_prior_cov(block_priors, Jac_x):
 
     idx_list = block_priors.get_idx_parameters_per_block()
     Kxx_diag_list = []
