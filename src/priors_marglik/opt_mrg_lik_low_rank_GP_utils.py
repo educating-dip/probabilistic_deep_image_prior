@@ -83,10 +83,14 @@ def post_hess_log_det_y_space(
     log_noise_model_variance, 
     ):
 
-    log_prior_det_inv = -block_priors.get_net_log_det_cov_mat()
-    Kyy = block_priors.matrix_prior_cov_mul(Jac_y) @ Jac_y.transpose(1, 0)
-    (sign, kernel_det) = torch.linalg.slogdet( torch.eye(Jac_y.shape[0]).to(log_noise_model_variance.device) * torch.exp(log_noise_model_variance)
-            + Kyy)
+    log_prior_det_inv = \
+        -block_priors.get_net_log_det_cov_mat()
+    Kyy = \
+        block_priors.matrix_prior_cov_mul(Jac_y) @ Jac_y.transpose(1, 0)
+    (sign, kernel_det) = torch.linalg.slogdet( 
+        torch.eye(Jac_y.shape[0]).to(log_noise_model_variance.device) * torch.exp(log_noise_model_variance)
+        + Kyy)
+
     assert sign > 0
     
     return log_prior_det_inv - log_noise_model_variance * Jac_y.shape[0] + kernel_det
@@ -114,8 +118,9 @@ def optim_marginal_lik_low_rank_GP(
 
     device = torch.device(('cuda:0' if torch.cuda.is_available() else 'cpu'))
 
-    log_noise_model_variance_y = torch.nn.Parameter(torch.zeros(1,
-            device=device))
+    log_noise_model_variance_y = torch.nn.Parameter(
+        torch.zeros(1, device=device)
+        )
 
     trafo, _, _, _ = extract_tafo_as_matrix(ray_trafos)
 
@@ -133,7 +138,8 @@ def optim_marginal_lik_low_rank_GP(
 
             optimizer.zero_grad()
             if cfg.mrglik.optim.include_predCP:
-                predCP_loss = marginal_lik_PredCP_linear_update(cfg, block_priors, Jac_x, torch.from_numpy(recon).to(device))
+                predCP_loss = \
+                    marginal_lik_PredCP_linear_update(cfg, block_priors, Jac_x, torch.from_numpy(recon).to(device))
             else: 
                 predCP_loss = torch.zeros(1)
 
@@ -143,12 +149,18 @@ def optim_marginal_lik_low_rank_GP(
                 log_noise_model_variance_y, 
                 )
 
-            reconstruction_log_lik = gaussian_log_prob(observation, recon_proj, torch.exp(log_noise_model_variance_y))
+            reconstruction_log_lik = gaussian_log_prob(
+                observation,
+                recon_proj,
+                torch.exp(log_noise_model_variance_y)
+                )
 
             if cfg.linearize_weights and lin_weights is not None:
-                weight_prior_log_prob = block_priors.get_net_prior_log_prob_lin_weights(lin_weights)
+                weight_prior_log_prob = \
+                    block_priors.get_net_prior_log_prob_lin_weights(lin_weights)
             else:
-                weight_prior_log_prob = block_priors.get_net_prior_log_prob()
+                weight_prior_log_prob = \
+                    block_priors.get_net_prior_log_prob()
             
             loss = -(reconstruction_log_lik + weight_prior_log_prob - 0.5 * posterior_hess_log_det_y_space)
 
@@ -156,8 +168,10 @@ def optim_marginal_lik_low_rank_GP(
             optimizer.step()
 
             for k in range(block_priors.num_params):
-                writer.add_scalar('lengthscale_{}'.format(k), torch.exp(block_priors.log_lengthscales[k]).item(), i)
-                writer.add_scalar('variance_{}'.format(k), torch.exp(block_priors.log_variances[k]).item(), i)
+                writer.add_scalar('lengthscale_{}'.format(k), 
+                                torch.exp(block_priors.log_lengthscales[k]).item(), i)
+                writer.add_scalar('variance_{}'.format(k), 
+                                torch.exp(block_priors.log_variances[k]).item(), i)
 
             writer.add_scalar('negative_MAP_MLL', loss.item() + predCP_loss.item(), i)
             writer.add_scalar('negative_MLL', loss.item(), i)
