@@ -1,0 +1,11 @@
+calibration_uncertainty_estimates: 
+  kmnist_sparse_10:  
+    - path: multirun/2021-11-13/15-19-39/0
+      name: sparse_10_low_noise_regime
+    - path: multirun/2021-11-13/22-30-03/2
+      name: sparse_10_high_noise_regime
+  kmnist_sparse_20: 
+    - path: multirun/2021-11-13/15-19-21/0
+      name: sparse_20_low_noise_regime
+    - path: multirun/2021-11-13/22-29-37/2
+      name: sparse_20_high_noise_regime
