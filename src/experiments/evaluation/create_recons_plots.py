@@ -111,7 +111,6 @@ def main_image_fig_subplots(data, loglik, filename, titles):
     matplotlib.rc('legend', fontsize=fs_m1)    # legend fontsize
     matplotlib.rc('figure', titlesize=fs_p1)   # fontsize of the figure title
 
-
     matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
     matplotlib.rc('text', usetex=True)
     matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
@@ -250,7 +249,7 @@ def collect_reconstruction_data(path, idx):
                 model_cov_matrix_mll, model_cov_matrix_map, Kxx_mll, Kxx_map)
  
 def extract_eigenvectors(data, k):
-    
+
     s, v = np.linalg.eigh(data)
     lev_score = ( (v[:, -10:])**2 ).sum(axis=1) 
     lev_score = ( lev_score - np.min(lev_score) ) / ( np.max(lev_score) - np.min(lev_score) )
@@ -285,34 +284,45 @@ if __name__ == "__main__":
         if not os.path.isdir(images_dir):
             os.makedirs(images_dir)
 
-        create_eigs_uncertainty_subplots(
-            v_mll, 
-            v_map, 
-            images_dir + '/eigs_plot_{}'.format(i)
-            )
+        # create_eigs_uncertainty_subplots(
+        #     v_mll, 
+        #     v_map, 
+        #     images_dir + '/eigs_plot_{}'.format(i)
+        #     )
 
         main_image_fig_subplots( 
-            (image, filtbackproj, recon, ((abs_error, std_pred_mll, std_pred_map),  ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev (MLL)', 'std-dev  (Type-II MAP)']), abs_error, std_pred_mll, std_pred_map, ((abs_error, s_mll, s_map),['$|{\mathbf{x} - \mathbf{x}^*}|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ (MLL)',
-                '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$  (Type-II MAP)'])), 
+            (
+            image, filtbackproj, recon, 
+                (
+                    (abs_error, std_pred_mll, std_pred_map),  
+                    ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev (MLL)', 'std-dev  (Type-II MAP)']
+                ),
+            abs_error, std_pred_mll, std_pred_map, 
+            (
+                (abs_error, s_mll, s_map),
+                ['$|{\mathbf{x} - \mathbf{x}^*}|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ (MLL)',
+                '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$  (Type-II MAP)'])
+            ),
             (LL_mll, LL_map),
             images_dir + '/main_{}'.format(i), 
             ['${\mathbf{x}}$', 'FBP (i.e.\ ${\\textnormal{A}}^\dagger y_{\delta})$', 
-                '${\mathbf{x}^*}$', 'marginal std-dev', '${|\mathbf{x} - \mathbf{x}^*|}$', 'std-dev  (MLL)', 'std-dev (Type-II MAP)', 'covariance eigenspectrum']
+            '${\mathbf{x}^*}$', 'marginal std-dev', '${|\mathbf{x} - \mathbf{x}^*|}$', 
+            'std-dev  (MLL)', 'std-dev (Type-II MAP)', 'covariance eigenspectrum']
             )
 
-        create_hist_plot( 
-            (abs_error, std_pred_mll, std_pred_map), 
-            images_dir + '/histogram_{}'.format(i), 
-            ['$|x - x^*|$', 'std -- MLL', 'std -- Type-II MAP'], 
-            'marginal std',
-            True
-            )
+        # create_hist_plot( 
+        #     (abs_error, std_pred_mll, std_pred_map), 
+        #     images_dir + '/histogram_{}'.format(i), 
+        #     ['$|x - x^*|$', 'std -- MLL', 'std -- Type-II MAP'], 
+        #     'marginal std',
+        #     True
+        #     )
 
-        create_hist_plot( 
-            (abs_error, s_mll, s_map), 
-            images_dir + '/histogram_eigs_{}'.format(i), 
-            ['$|x - x^*|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- MLL',
-                '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- Type-II MAP'], 
-            'eigenspectrum', 
-            False
-            )
+        # create_hist_plot( 
+        #     (abs_error, s_mll, s_map), 
+        #     images_dir + '/histogram_eigs_{}'.format(i), 
+        #     ['$|x - x^*|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- MLL',
+        #         '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- Type-II MAP'], 
+        #     'eigenspectrum', 
+        #     False
+        #     )
