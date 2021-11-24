@@ -47,12 +47,14 @@ def low_rank_GP_lin_model_post_pred_cov(block_priors, Jac_x, Jac_y, noise_model_
         block_priors.matrix_prior_cov_mul(Jac_x) @ Jac_y.transpose(1, 0)
     Kyx = Kxy.T
     cov = Kxx - Kxy @ torch.linalg.solve(Kyy, Kyx)
-    
-    cov[np.diag_indices(cov.shape[0])] += 1e-6
 
+    cov[np.diag_indices(cov.shape[0])] += 1e-6  
     assert cov.diag().min() > 0
 
-    return cov.diag(), cov
+    Kxx[np.diag_indices(Kxx.shape[0])] += 1e-6
+    assert Kxx.diag().min() > 0
+
+    return cov.diag(), cov, Kxx
 
 
 def submatrix_low_rank_GP_lin_model_prior_cov(block_priors, Jac_x):

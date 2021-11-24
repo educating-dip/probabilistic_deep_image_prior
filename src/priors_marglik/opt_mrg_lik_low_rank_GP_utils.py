@@ -26,19 +26,19 @@ def marginal_lik_PredCP_linear_update(
     for cov in list_model_prior_cov:
         succed = False
         cnt = 0
-        while not succed: 
+        while not succed:
             try: 
                 dist = \
                     torch.distributions.multivariate_normal.MultivariateNormal(loc=recon.flatten().to(block_priors.store_device),
                         covariance_matrix=cov)
                 succed = True 
             except: 
-                cov[np.diag_indices(cov.shape[0])] += 1e-4 # cov.diag().detach().mean() / 1000
+                cov[np.diag_indices(cov.shape[0])] += 1e-4
                 cnt += 1
             assert cnt < 100
 
         samples = dist.rsample((100, ))
-        expected_tv.append(tv_loss(samples.view(-1, *recon.shape)).mean(dim=0))
+        expected_tv.append(tv_loss(samples.view(-1, *recon.shape)) / 100)
 
     log_det_list = []
     for i in range(block_priors.num_params):
@@ -63,17 +63,12 @@ def marginal_lik_PredCP_linear_update(
         second_derivative = second_derivative.detach()
         block_priors.priors[i].zero_grad()
 
-        block_priors.log_lengthscales[i].grad = -(-first_derivative
-                * cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma
-                * cfg.mrglik.optim.gamma + second_derivative) 
+        overall_scaling_fct = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma
 
-        block_priors.log_variances[i].grad = -(-first_derivative_log_variances \
-            * cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma \
-            * cfg.mrglik.optim.gamma + second_derivative_log_variances )
+        block_priors.log_lengthscales[i].grad = -(-first_derivative + second_derivative) * overall_scaling_fct
+        block_priors.log_variances[i].grad = -(-first_derivative_log_variances + second_derivative_log_variances ) * overall_scaling_fct
     
-    loss = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma \
-        * cfg.mrglik.optim.gamma * torch.stack(expected_tv).sum().detach() \
-        - torch.stack(log_det_list).sum().detach()
+    loss = overall_scaling_fct * (torch.stack(expected_tv).sum().detach() - torch.stack(log_det_list).sum().detach())
 
     return loss
 
@@ -181,5 +176,4 @@ def optim_marginal_lik_low_rank_GP(
             writer.add_scalar('predCP', -predCP_loss.item(), i)
             writer.add_scalar('log_lik_variance_y', torch.exp(log_noise_model_variance_y).item(), i)
 
-
-    return torch.exp(log_noise_model_variance_y).detach()
+    return torch.exp(log_noise_model_variance_y).detach(), -(loss.item() + predCP_loss.item())

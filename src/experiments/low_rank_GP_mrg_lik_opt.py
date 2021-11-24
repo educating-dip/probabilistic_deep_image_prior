@@ -31,10 +31,8 @@ def coordinator(cfg : DictConfig) -> None:
 
     ray_trafos = get_standard_ray_trafos(cfg, return_op_mat=True)
 
-    test_log_lik_no_PredCP_list  = []
-    test_log_lik_noise_model_unit_var_list = []
-    test_log_lik_noise_model_list = []
-    test_log_lik_w_PredCP_list = []
+    test_log_lik_no_PredCP_list, test_log_lik_noise_model_unit_var_list, \
+         test_log_lik_noise_model_list, test_log_lik_w_PredCP_list  = [], [], [], []
     filename = os.path.join(os.getcwd(), 'results.txt')
     with open(filename, 'w') as f:
         with redirect_stdout(f):
@@ -55,7 +53,7 @@ def coordinator(cfg : DictConfig) -> None:
 
                 recon, recon_no_sigmoid = reconstructor.reconstruct(observation, 
                     filtbackproj, example_image)
-
+                
                 torch.save(reconstructor.model.state_dict(),
                         './reconstructor_model_{}.pt'.format(i))
 
@@ -88,7 +86,7 @@ def coordinator(cfg : DictConfig) -> None:
                     cfg.mrglik.priors.lengthscale_init,
                     lin_weights=lin_weights)
 
-                noise_model_variance_y_no_PredCP = optim_marginal_lik_low_rank_GP(
+                noise_model_variance_y_no_PredCP, MLL = optim_marginal_lik_low_rank_GP(
                     cfg,
                     observation,
                     recon, 
@@ -102,8 +100,11 @@ def coordinator(cfg : DictConfig) -> None:
                 
                 torch.save(block_priors.state_dict(), 
                     './block_priors_no_PredCP_{}.pt'.format(i))
+                
+                print('MLL: {:.4f}'\
+                    .format(MLL))
 
-                (_, model_post_cov_no_predCP) = low_rank_GP_lin_model_post_pred_cov(
+                (_, model_post_cov_no_PredCP, Kxx_no_PredCP) = low_rank_GP_lin_model_post_pred_cov(
                     block_priors,
                     Jac_x,
                     Jac_y, 
@@ -130,7 +131,7 @@ def coordinator(cfg : DictConfig) -> None:
                 test_log_lik_no_PredCP = gaussian_log_prob(
                     example_image.flatten().cuda(),
                     torch.from_numpy(recon).flatten().cuda(),
-                    model_post_cov_no_predCP, 
+                    model_post_cov_no_PredCP, 
                     lik_hess_inv_no_PredCP
                     )
                 
@@ -176,7 +177,7 @@ def coordinator(cfg : DictConfig) -> None:
                     cfg.mrglik.priors.lengthscale_init,
                     lin_weights=lin_weights)
 
-                noise_model_variance_y_w_PredCP = optim_marginal_lik_low_rank_GP(
+                noise_model_variance_y_w_PredCP, MLL_MAP = optim_marginal_lik_low_rank_GP(
                     cfg,
                     observation,
                     recon, 
@@ -188,13 +189,16 @@ def coordinator(cfg : DictConfig) -> None:
                     comment = '_w_PredCP_recon_num_' + str(i)
                     )
                 
+                print('MLL_MAP: {:.4f}'\
+                    .format(MLL_MAP), flush=True)
+                
                 torch.save(block_priors.state_dict(), 
                     './block_priors_w_PredCP_{}.pt'.format(i))
 
                 lik_hess_inv_w_PredCP = Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_y_w_PredCP\
                     + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
 
-                (_, model_post_cov_w_PredCP) = \
+                (_, model_post_cov_w_PredCP, Kxx_w_PredCP) = \
                     low_rank_GP_lin_model_post_pred_cov(
                         block_priors,
                         Jac_x, 
@@ -217,11 +221,13 @@ def coordinator(cfg : DictConfig) -> None:
                 test_log_lik_w_PredCP_list.append(test_log_lik_w_PredCP.item())
 
                 dict = {'cfgs': cfg,
-                            'test_log_lik':{
-                                'type-II-MAP': test_log_lik_w_PredCP.item(),
-                                'MLL': test_log_lik_no_PredCP.item(),
-                                'noise_model': test_log_lik_noise_model.item(),
-                                'noise_model_unit_variance': test_log_lik_noise_model_unit_var.item()}
+                        'test_log_lik':{
+                            'type-II-MAP': test_log_lik_w_PredCP.item(),
+                            'MLL': test_log_lik_no_PredCP.item(),
+                            'noise_model': test_log_lik_noise_model.item(),
+                            'noise_model_unit_variance': test_log_lik_noise_model_unit_var.item()},
+                        'MLL': MLL, 
+                        'MLL_MAP': MLL_MAP
                         }
 
                 try: 
@@ -241,8 +247,10 @@ def coordinator(cfg : DictConfig) -> None:
                         'noise_model_variance_y_no_PredCP': noise_model_variance_y_no_PredCP.item(),
                         'noise_model_no_PredCP': lik_hess_inv_no_PredCP.cpu().numpy(),
                         'noise_model_w_PredCP': lik_hess_inv_w_PredCP.cpu().numpy(),
-                        'model_post_cov_no_predCP': model_post_cov_no_predCP.detach().cpu().numpy(),
-                        'model_post_cov_w_PredCP': model_post_cov_w_PredCP.detach().cpu().numpy()
+                        'model_post_cov_no_PredCP': model_post_cov_no_PredCP.detach().cpu().numpy(),
+                        'model_post_cov_w_PredCP': model_post_cov_w_PredCP.detach().cpu().numpy(),
+                        'Kxx_no_PredCP': Kxx_no_PredCP.detach().cpu().numpy(),
+                        'Kxx_w_PredCP': Kxx_w_PredCP.detach().cpu().numpy()
                         }
 
                 np.savez('test_log_lik_info_{}'.format(i), **dict)

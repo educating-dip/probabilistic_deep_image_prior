@@ -1,15 +1,17 @@
 import hydra
 import torch
-import tqdm
 import time
+import random
 import numpy as np
 from torch import linalg
 from omegaconf import DictConfig
-from dataset.mnist import simulate
-from dataset.utils import load_testset_MNIST_dataset, get_standard_ray_trafos
+from dataset import simulate
+from dataset.utils import load_testset_KMNIST_dataset, get_standard_ray_trafos
 from deep_image_prior import DeepImagePriorReconstructor, list_norm_layers,  set_all_weights, get_weight_vec, tv_loss
-from priors import *
-
+from priors_marglik import *
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import matplotlib
 
 def get_average_var_group_filter(model, norm_layers):
     var = []
@@ -20,70 +22,75 @@ def get_average_var_group_filter(model, norm_layers):
             var.append(param_.var(dim=1).mean(dim=0).item())
     return np.mean(var)
 
-def plot_monotonicity_traces(len_vec, tv_samples_list, filename):
+def plot_monotonicity_traces(len_vec, overall_tv_samples_list, filename):
 
     def moving_average(x, w=5):
         return np.convolve(x, np.ones(w), 'valid') / w
+    
+    fs_m1 = 6  # for figure ticks
+    fs = 10    # for regular figure text
+    fs_p1 = 15 #  figure titles
 
-    import matplotlib.pyplot as plt
+    matplotlib.rc('font', size=fs)          # controls default text sizes
+    matplotlib.rc('axes', titlesize=fs)     # fontsize of the axes title
+    matplotlib.rc('axes', labelsize=fs)     # fontsize of the x and y labels
+    matplotlib.rc('xtick', labelsize=fs_m1)    # fontsize of the tick labels
+    matplotlib.rc('ytick', labelsize=fs_m1)    # fontsize of the tick labels
+    matplotlib.rc('legend', fontsize=fs_m1)    # legend fontsize
+    matplotlib.rc('figure', titlesize=fs_p1)   # fontsize of the figure title
+    matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
+    matplotlib.rc('text', usetex=True)
+    matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
     w = 100 # fixed window size
-    fig, ax = plt.subplots(figsize=(6, 6))
-    mean = np.mean(np.asarray(tv_samples_list), axis=1)
-    mean = moving_average(mean, w)
-    standard_dev = np.std(np.asarray(tv_samples_list), axis=1)
-    standard_dev = moving_average(standard_dev, w) / np.sqrt(np.asarray(tv_samples_list).shape[1])
-    plt.plot(len_vec[:-w+1], mean, linewidth=2.5, color='#EC2215')
-    plt.fill_between(len_vec[:-w+1], mean-standard_dev, mean+standard_dev, color='#EC2215', alpha = 0.5)
-    plt.xscale('log')
-    ax.set_xlabel('$\ell$', fontsize=12)
-    ax.set_ylabel('$\kappa$', fontsize=12)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+    fig, axs = plt.subplots(1, 4, figsize=(7, 2))
+    titles = ['Down$_1$', 'Down$_2$', 'Up$_1$', 'Up$_2$']
+    for i, (ax, tv_samples_list) in enumerate(zip(axs.flatten(), overall_tv_samples_list)):
+
+        mean = np.mean(np.asarray(tv_samples_list), axis=1)
+        mean = moving_average(mean, w)
+        standard_dev = np.std(np.asarray(tv_samples_list), axis=1)
+        standard_dev = moving_average(standard_dev, w) / np.sqrt(np.asarray(tv_samples_list).shape[1])
+
+        ax.plot(len_vec[:-w+1], mean, linewidth=2.5, color='#EC2215')
+        ax.fill_between(len_vec[:-w+1], mean-standard_dev, mean+standard_dev, color='#EC2215', alpha = 0.5)
+        ax.set_xscale('log')
+        ax.set_title(titles[i], pad=5)
+        ax.grid(0.3)
+        ax.set_xlabel('$\ell$', fontsize=12)
+        ax.set_ylabel('$\kappa$', fontsize=12)
+    
     plt.tight_layout()
     fig.savefig(filename + '.pdf', bbox_inches='tight')
-
-def fig_subplots_wrapper(n_rows, n_cols, len_vec, samples_list, filename):
-
-    import matplotlib.pyplot as plt
-
-    def GetSpacedElements(array, numElems=4):
-        out = array[np.round(np.linspace(0, len(array)-1, numElems)).astype(int)]
-        return out
-
-    idx_list = list(range(0, len(samples_list)))
-    idx = GetSpacedElements(np.asarray(idx_list), numElems=n_rows*n_cols)
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(5,5),  facecolor='w', edgecolor='k', constrained_layout=True)
-    minmin = np.min(np.asarray(samples_list))
-    maxmax = np.max(np.asarray(samples_list))
-    for i, ax in zip(idx, axs.flatten()):
-        im = ax.imshow(samples_list[i], vmin=minmin, vmax=maxmax, cmap='gray')
-        ax.set_title('$\ell$: {:.4f}'.format(len_vec[i]), fontsize=10)
-        ax.set_axis_off()
-    fig.colorbar(im, ax=axs.ravel().tolist(), shrink=0.95)
-    fig.savefig(filename + '.pdf')
+    fig.savefig(filename + '.png', dpi=600)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
-    mnist_loader = load_testset_MNIST_dataset()
+    np.random.seed(cfg.net.torch_manual_seed)
+    random.seed(cfg.net.torch_manual_seed)
+
+    loader = load_testset_KMNIST_dataset()
     ray_trafos = get_standard_ray_trafos(cfg)
-    examples = enumerate(mnist_loader)
+    examples = enumerate(loader)
     _, (example_image, _) = next(examples)
-    observation, filtbackproj, example_image = simulate(example_image, ray_trafos, cfg.noise_specs)
+    _, filtbackproj, example_image = simulate(example_image, ray_trafos, cfg.noise_specs)
     dip_ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'], 'reco_space': ray_trafos['space']}
     reconstructor = DeepImagePriorReconstructor(**dip_ray_trafo, cfg=cfg.net)
-    recon = reconstructor.reconstruct(observation, filtbackproj, example_image)
+    # recon = reconstructor.reconstruct(observation, filtbackproj, example_image)
+    path_to_params = os.path.join('/media/chen/Res/dip_bayesian_ext/src/experiments', 
+        'multirun/2021-11-13/15-19-39/0/reconstructor_model_0.pt') # hard-coded 
+    reconstructor.model.load_state_dict(torch.load(path_to_params))
     filtbackproj = filtbackproj.to(reconstructor.device)
+    
     sampling_blocks = {
         'down_0': reconstructor.model.down[0],
         'down_1': reconstructor.model.down[1],
         'up_0': reconstructor.model.up[0],
         'up_1': reconstructor.model.up[1],
-        'inc': reconstructor.model.inc,
         }
-
-    for key, block in tqdm.tqdm(sampling_blocks.items()):
+    overall_TV_samples_list = []
+    for key, block in tqdm(sampling_blocks.items()):
         for name, param in block.named_parameters():
             print(name, param.shape)
         norm_layers = list_norm_layers(block)
@@ -94,7 +101,7 @@ def coordinator(cfg : DictConfig) -> None:
             len_vec = np.logspace(-2, 2, 1000)
             variance_init = get_average_var_group_filter(block, norm_layers)
             tv_samples_list, recon_samples_list, filter_samples_list = [], [], []
-            for lengthscale_init in tqdm.tqdm(len_vec, leave=False):
+            for lengthscale_init in tqdm(len_vec, leave=False):
                 kernel_size = 3 # we discard layers that have kernel_size of 1
                 cov_kwards = {
                     'kernel_size': kernel_size,
@@ -107,7 +114,7 @@ def coordinator(cfg : DictConfig) -> None:
                 GPp = GPprior(cov_func, reconstructor.device)
                 tv_samples = []
                 recon_samples = []
-                for _ in range(1000):
+                for _ in range(500):
                     samples = GPp.sample(shape=[len_out//kernel_size**2])
                     set_all_weights(block, norm_layers, samples.flatten())
                     recon = reconstructor.model.forward(filtbackproj)[0]
@@ -123,10 +130,10 @@ def coordinator(cfg : DictConfig) -> None:
                     'filters_samples': np.asarray(filter_samples_list)
                     }
             np.savez(key + '.npz', *data)
-            plot_monotonicity_traces(len_vec, tv_samples_list, filename = key)
-            fig_subplots_wrapper(5, 5, len_vec, recon_samples_list, filename = key + '_recon')
-            fig_subplots_wrapper(5, 5, len_vec, filter_samples_list, filename = key + '_filter')
             time.sleep(0.01)
+        overall_TV_samples_list.append(tv_samples_list)
+        
+    plot_monotonicity_traces(len_vec, overall_TV_samples_list, filename = 'monotonicity_plot')
 
 if __name__ == '__main__':
     coordinator()
