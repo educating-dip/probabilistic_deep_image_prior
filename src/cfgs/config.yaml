@@ -3,6 +3,7 @@ defaults:
   - trafo: simple_ray_trafo
   - net: unet
   - mrglik: mrglik
+  - trn: trainer
 seed: 1
 linearize_weights: False
 num_images: 9

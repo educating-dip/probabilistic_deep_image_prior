@@ -132,6 +132,7 @@ dmypy.json
 outputs/
 mnist/
 kmnist/
+walnuts/
 multirun/
 
 # images 
