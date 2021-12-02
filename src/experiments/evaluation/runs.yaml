@@ -9,3 +9,26 @@ calibration_uncertainty_estimates:
       name: sparse_20_low_noise_regime
     - path: multirun/2021-11-13/22-29-37/2
       name: sparse_20_high_noise_regime
+samples:
+  kmnist_sparse_10: #low noise
+    - path: multirun/2021-11-17/11-16-15/0
+      name: sparse_10_low_noise_regime
+  kmnist_sparse_20: #low noise 
+    - path: multirun/2021-11-17/11-16-15/0
+      name: sparse_20_low_noise_regime
+architerture_search:
+  kmnist_sparse_10:
+    - path: multirun/2021-11-16/17-31-53/0
+      name: depth_2_channel_16
+    - path: multirun/2021-11-16/17-42-19/0
+      name: depth_2_channel_32
+    - path: multirun/2021-11-16/17-52-31/0
+      name: depth_2_channel_64
+    - path: multirun/2021-11-16/20-52-15/0
+      name: depth_3_channel_8
+    - path: multirun/2021-11-16/21-06-03/0
+      name: depth_3_channel_16
+    - path: multirun/2021-11-16/18-51-07/2
+      name: depth_3_channel_32
+    - path: multirun/2021-11-16/18-51-07/3
+      name: depth_3_channel_64

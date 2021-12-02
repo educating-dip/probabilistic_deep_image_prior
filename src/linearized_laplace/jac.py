@@ -32,3 +32,4 @@ def agregate_flatten_weight_grad(model, include_block=['down', 'up']):
                     if isinstance(layer, torch.nn.Conv2d):
                         grads_o.append(layer.weight.grad.flatten())
     return torch.cat(grads_o)
+    

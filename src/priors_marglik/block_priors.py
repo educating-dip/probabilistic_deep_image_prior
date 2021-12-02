@@ -19,7 +19,6 @@ class BlocksGPpriors(nn.Module):
         self.model = require_grad_false(model)
         self.store_device = store_device
         self.lengthscale_init = lengthscale_init
-        self.num_mc_samples = 100
         self.priors = torch.nn.ModuleList(self._assemble_block_priors())
         self.lin_weights = lin_weights
         self.num_params = \
@@ -53,33 +52,6 @@ class BlocksGPpriors(nn.Module):
         return [param for (name, param) in self.priors.named_parameters()
                 if param.requires_grad and name.find('log_variance') != -1]
 
-    def get_expected_TV_loss(self, x):
-
-        model_sections = ['down', 'up']
-        exp_tv_loss = []
-        i = 0
-        for sect_name in model_sections:
-            group_blocks = getattr(self.model, sect_name)
-            if isinstance(group_blocks, Iterable):
-                for k, _ in enumerate(group_blocks):
-                    if sect_name  == 'down':
-                        original_block = deepcopy(self.model.down[k])
-                        self.model.down[k] = self.priors[i]
-                    elif sect_name == 'up':
-                        original_block = deepcopy(self.model.up[k])
-                        self.model.up[k] = self.priors[i]
-                    tv_loss_samples = torch.zeros(1, device=self.store_device)
-                    for _ in range(self.num_mc_samples):
-                        recon = self.model.forward(x)[0]
-                        tv_loss_samples = tv_loss_samples + tv_loss(recon)
-                    exp_tv_loss.append(tv_loss_samples/self.num_mc_samples)
-                    # reverting back to the original model
-                    if sect_name == 'down':
-                        self.model.down[k] = original_block
-                    elif sect_name == 'up':
-                        self.model.up[k] = original_block
-                    i += 1
-        return exp_tv_loss
 
     def _get_repeat(self, module):
 
