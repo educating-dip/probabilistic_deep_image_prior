@@ -32,12 +32,12 @@ def marginal_lik_predcp_linear_update(
                     )
                 succed = True 
             except: 
-                cov_ff[np.diag_indices(cov_ff.shape[0])] += 1e-4
+                cov_ff[np.diag_indices(cov_ff.shape[0])] += 1e-6
                 cnt += 1
-            assert cnt < 100
+            assert cnt < 1000
 
-        samples = dist.rsample((100, ))
-        expected_tv.append(tv_loss(samples.view(-1, *recon.shape)) / 100)
+        samples = dist.rsample((cfg.mrglik.optim.tv_samples, ))
+        expected_tv.append(tv_loss(samples.view(-1, *recon.shape)) / cfg.mrglik.optim.tv_samples)
 
     log_det_list = []
     for i in range(block_priors.num_params):
