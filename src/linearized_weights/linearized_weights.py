@@ -22,7 +22,7 @@ def finite_diff_JvP(x, model, vec, eps=None):
             torch_eps = torch.finfo(vec.dtype).eps
             w_map_max = map_weights.abs().max().clamp(min=torch_eps)
             v_max = vec.abs().max().clamp(min=torch_eps)
-            eps = np.sqrt(torch_eps) * (1 + w_map_max)  / v_max
+            eps = np.sqrt(torch_eps) * (1 + w_map_max) / (2 * v_max)
 
         w_plus = map_weights.clone().detach() + vec * eps
         set_all_weights_block(model, w_plus)
