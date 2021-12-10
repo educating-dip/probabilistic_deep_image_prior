@@ -48,7 +48,6 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
     ray_trafo_impl = cfg.get('ray_trafo_impl', None)
 
     if not ray_trafo_impl:  # default, create parallel beam geometry
-        print(cfg)
         half_size = cfg.size / 2
         space = odl.uniform_discr([-half_size, -half_size], [half_size,
                                 half_size], [cfg.size, cfg.size],

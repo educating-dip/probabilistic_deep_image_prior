@@ -6,6 +6,7 @@ import numpy as np
 import tensorboardX
 from torch.optim import Adam
 from torch.nn import MSELoss
+from hydra.utils import get_original_cwd
 from tqdm import tqdm
 from warnings import warn 
 from .network import UNet
@@ -61,9 +62,10 @@ class DeepImagePriorReconstructor():
 
         self.init_model()
         if self.cfg.load_pretrain_model:
-            path = \
+            path = os.path.join(
+                get_original_cwd(),
                 self.cfg.learned_params_path if self.cfg.learned_params_path.endswith('.pt') \
-                    else self.cfg.learned_params_path + '.pt'
+                    else self.cfg.learned_params_path + '.pt')
             self.model.load_state_dict(torch.load(path, map_location=self.device))
         else:
             self.model.to(self.device)

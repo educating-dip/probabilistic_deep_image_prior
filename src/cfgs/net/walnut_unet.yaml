@@ -8,11 +8,12 @@ arch:
   sigmoid_saturation_thresh: 15
 optim:
   lr: 1e-4
-  iterations: 10000
+  iterations: 1500
   loss_function: mse
-  gamma: 1e-4
+  gamma: 6.5e-6
 show_pbar: True
 torch_manual_seed: 10
 log_path: ./
-load_pretrain_model: False
+load_pretrain_model: True
+learned_params_path: outputs/2021-12-02/17-23-12/params/model_walnut.pt
 recon_from_randn: False
