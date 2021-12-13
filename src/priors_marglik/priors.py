@@ -8,6 +8,7 @@ try:
 except:
     from torch import cholesky
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions.normal import Normal
 
 class RadialBasisFuncCov(nn.Module):
 
@@ -76,17 +77,30 @@ class GPprior(nn.Module):
         m = MultivariateNormal(loc=mean, scale_tril=cov)
         return m.log_prob(x)
 
-if __name__ == '__main__':
+class NormalPrior(nn.Module):
 
-    dist_func = lambda x: linalg.norm(x, ord=2)
-    cov_kwards = {
-        'kernel_size': 3,
-        'lengthscale_init': 1,
-        'variance_init': 1,
-        'dist_func': dist_func,
-        'store_device': None
-        }
-    cov_func = RadialBasisFuncCov(**cov_kwards)
-    p = GPprior(cov_func)
-    samples = p.sample(shape=[32, 3])
-    print(samples.size())
+    def __init__(
+        self,
+        kernel_size,
+        variance_init,
+        store_device
+        ):
+
+        super().__init__()
+        self.store_device = store_device
+        self.kernel_size = kernel_size
+        self.log_variance = nn.Parameter(torch.ones(1, device=self.store_device))
+        self._init_parameters(variance_init)
+
+    def _init_parameters(self, variance_init):
+        nn.init.constant_(self.log_variance, np.log(variance_init))
+
+    def sample(self, shape):
+        mean = torch.zeros(self.kernel_size, device=self.store_device)
+        m = Normal(loc=mean, scale=torch.exp(self.log_variance)**.5)
+        return m.rsample(sample_shape=shape)
+
+    def log_prob(self, x):
+        mean = torch.zeros(self.kernel_size, device=self.store_device)
+        m = Normal(loc=mean, scale=torch.exp(self.log_variance)**.5)
+        return m.log_prob(x)

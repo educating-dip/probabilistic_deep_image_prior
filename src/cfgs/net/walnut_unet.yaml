@@ -15,5 +15,6 @@ show_pbar: True
 torch_manual_seed: 10
 log_path: ./
 load_pretrain_model: True
-learned_params_path: outputs/2021-12-02/17-23-12/params/model_walnut.pt
+learned_params_path: outputs/2021-12-02/17-23-12/params/model_walnut.pt # from pretraining 
+finetuned_params_path: multirun/2021-12-10/19-01-41/0/dip_model_0.pt # spec. to obs.
 recon_from_randn: False

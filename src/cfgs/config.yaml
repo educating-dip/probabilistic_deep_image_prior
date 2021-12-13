@@ -2,8 +2,9 @@ defaults:
   - data: kmnist
   - trafo: simple_ray_trafo
   - net: unet
+  - lin_params: lin_params
   - mrglik: mrglik
   - trn: trainer
 seed: 1
 linearize_weights: False
-num_images: 9
+num_images: 1
