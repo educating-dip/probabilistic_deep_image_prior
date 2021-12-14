@@ -61,6 +61,16 @@ class BayesianizeModel(nn.Module):
         else:
             return []
     
+    def _remove_modules_from_inactive_skip_ch(self, modules, sub_block):
+
+        if hasattr(sub_block, 'skip'):
+            if not sub_block.skip:
+                return modules[:-1]
+            else:
+                return modules
+        else:
+            return modules
+
     def init_priors(self, reconstructor, priors_kwards):
 
         def _add_priors_from_modules(modules, priors_kwards): 
@@ -76,11 +86,11 @@ class BayesianizeModel(nn.Module):
             if isinstance(block, Iterable):
                 for sub_block in block:
                     modules = self._extract_Conv2d_modules(sub_block)
+                    modules = self._remove_modules_from_inactive_skip_ch(modules, sub_block)
                     _add_priors_from_modules(modules, priors_kwards)
             else:
                 modules = self._extract_Conv2d_modules(block)
                 _add_priors_from_modules(modules, priors_kwards)
-
 
     def _add_gp_priors(self, modules, lengthscale_init, variance_init):
 
