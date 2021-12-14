@@ -26,6 +26,15 @@ class BayesianizeModel(nn.Module):
                     'variance_init': variance_init
                 }
             )
+
+        self.ref_num_filters_per_modules_under_gp_priors = self._get_num_filters_under_priors(
+                self.ref_modules_under_gp_priors
+            )
+        
+        self.ref_num_filters_per_modules_under_normal_priors = self._get_num_filters_under_priors(
+                self.ref_modules_under_normal_priors
+            )
+
     
     def _extract_blocks_from_model(self, model):
         return [block for block in model.children()]
@@ -123,3 +132,13 @@ class BayesianizeModel(nn.Module):
         for modules in self.ref_modules_under_normal_priors:
             all_modules += modules
         return all_modules
+    
+    def _get_num_filters_under_priors(self, modules_under_priors):
+
+        num_filters_under_priors = []
+        for modules in modules_under_priors:
+            num_filters_per_modules = 0
+            for module in modules:
+                num_filters_per_modules +=  module.in_channels * module.out_channels
+            num_filters_under_priors.append(num_filters_per_modules)
+        return num_filters_under_priors
