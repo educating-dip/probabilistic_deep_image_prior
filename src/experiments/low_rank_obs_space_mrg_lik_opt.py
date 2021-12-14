@@ -50,6 +50,12 @@ def coordinator(cfg : DictConfig) -> None:
                     **dip_ray_trafo, 
                     cfg=cfg.net
                     )
+                all_modules_under_prior = (
+                        BayesianizeModel(
+                                reconstructor, **{
+                                    'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
+                                    'variance_init': cfg.mrglik.priors.variance_init})
+                        .get_all_modules_under_prior())
                 # reconstruction - learning MAP estimate weights
                 filtbackproj = filtbackproj.to(reconstructor.device)
                 cfg.mrglik.optim.scl_fct_gamma = observation.view(-1).shape[0]
@@ -64,6 +70,7 @@ def coordinator(cfg : DictConfig) -> None:
                 Jac = compute_jacobian_single_batch(
                     filtbackproj,
                     reconstructor.model, 
+                    all_modules_under_prior,
                     example_image.flatten().shape[0]
                     )
                 trafos = extract_trafos_as_matrices(ray_trafos)

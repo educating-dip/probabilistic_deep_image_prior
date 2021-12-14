@@ -57,7 +57,7 @@ class BayesianizeModel(nn.Module):
             if all(el == kernel_size_list[0] for el in kernel_size_list):
                 return modules
             else: 
-                return modules[kernel_size_list.index(kernel_size)]
+                return [modules[kernel_size_list.index(kernel_size)]]
         else:
             return []
     
@@ -96,7 +96,7 @@ class BayesianizeModel(nn.Module):
             RadialBasisFuncCov(**cov_kwards).to(self.store_device)
         GPp = GPprior(cov_func, self.store_device)
         self.gp_priors.append(GPp)
-        self.ref_modules_under_gp_priors.append([GPp, modules])
+        self.ref_modules_under_gp_priors.append(modules)
 
     def _add_normal_priors(self, modules, variance_init):
 
@@ -104,4 +104,12 @@ class BayesianizeModel(nn.Module):
                 variance_init = variance_init,
                 store_device = self.store_device)
         self.normal_priors.append(normal_prior)
-        self.ref_modules_under_normal_priors.append([normal_prior, modules])
+        self.ref_modules_under_normal_priors.append(modules)
+
+    def get_all_modules_under_prior(self):
+        all_modules = []
+        for modules in self.ref_modules_under_gp_priors:
+            all_modules += modules
+        for modules in self.ref_modules_under_normal_priors:
+            all_modules += modules
+        return all_modules

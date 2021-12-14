@@ -124,6 +124,13 @@ def coordinator(cfg : DictConfig) -> None:
         dip_ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'], 
                         'reco_space': ray_trafos['space']}
         reconstructor = DeepImagePriorReconstructor(**dip_ray_trafo, cfg=cfg.net)
+
+        all_modules_under_prior = (
+                BayesianizeModel(
+                        reconstructor, **{
+                            'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
+                            'variance_init': cfg.mrglik.priors.variance_init})
+                .get_all_modules_under_prior())
         
         # reconstruction - learning MAP estimate weights
         filtbackproj = filtbackproj.to(reconstructor.device)
@@ -139,6 +146,7 @@ def coordinator(cfg : DictConfig) -> None:
         Jac_x = compute_jacobian_single_batch(
             filtbackproj,
             reconstructor.model, 
+            all_modules_under_prior,
             example_image.flatten().shape[0]
             )
         
