@@ -10,7 +10,7 @@ from dataset.utils import load_testset_MNIST_dataset, load_testset_KMNIST_datase
 from deep_image_prior import DeepImagePriorReconstructor
 from priors_marglik import *
 from linearized_laplace import compute_jacobian_single_batch
-from linearized_laplace import submatrix_low_rank_GP_lin_model_prior_cov
+from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 import matplotlib 
 import matplotlib.pyplot as plt
 
@@ -60,20 +60,29 @@ def plot_monotonicity_traces(len_vec, overall_tv_samples_list, overall_tv_sample
     fig.savefig(filename + '.pdf', bbox_inches='tight')
     fig.savefig(filename + '.png', dpi=600)
 
-def compute_exptected_tv(reconstructor, recon, Jac_x, apply_normalization=False): 
+def compute_exptected_tv(reconstructor, recon, Jac_x, cfg, apply_normalization=False): 
 
     len_vec = np.logspace(-2, 2, 500)
     sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3 = [], [], [], []
     for lengthscale_init in tqdm(len_vec, leave=False):
         
+        bayesianize_model = BayesianizeModel(
+                reconstructor, **{
+                    'lengthscale_init': lengthscale_init,
+                    'variance_init': cfg.mrglik.priors.variance_init},
+                    include_normal_priors=cfg.mrglik.priors.include_normal_priors)
         block_priors = BlocksGPpriors(
             reconstructor.model,
+            bayesianize_model,
             reconstructor.device,
             lengthscale_init,
+            cfg.mrglik.priors.variance_init,
             lin_weights=None)
 
-        _, list_model_prior_cov = submatrix_low_rank_GP_lin_model_prior_cov(block_priors, Jac_x)
+        _, list_model_prior_cov = submatrix_image_space_lin_model_prior_cov(block_priors, Jac_x)
         expected_tv = []
+        # reduce to gp priors only (omit normal priors)
+        list_model_prior_cov = list_model_prior_cov[:len(bayesianize_model.gp_priors)]
         for cov in list_model_prior_cov:
             succed = False
             cnt = 0
@@ -84,7 +93,7 @@ def compute_exptected_tv(reconstructor, recon, Jac_x, apply_normalization=False)
                 try: 
                     dist = \
                         torch.distributions.multivariate_normal.MultivariateNormal(loc=recon.flatten().to(block_priors.store_device),
-                            covariance_matrix=cov)
+                            scale_tril=torch.linalg.cholesky(cov))  # covariance_matrix=cov)
                     succed = True 
                 except: 
                     cov[np.diag_indices(cov.shape[0])] += 1e-4
@@ -129,7 +138,8 @@ def coordinator(cfg : DictConfig) -> None:
                 BayesianizeModel(
                         reconstructor, **{
                             'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
-                            'variance_init': cfg.mrglik.priors.variance_init})
+                            'variance_init': cfg.mrglik.priors.variance_init},
+                            include_normal_priors=cfg.mrglik.priors.include_normal_priors)
                 .get_all_modules_under_prior())
         
         # reconstruction - learning MAP estimate weights
@@ -151,10 +161,10 @@ def coordinator(cfg : DictConfig) -> None:
             )
         
         (sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3) = \
-             compute_exptected_tv(reconstructor, recon, Jac_x, False)
+             compute_exptected_tv(reconstructor, recon, Jac_x, cfg, False)
 
         (sweep_exp_tv_block_0_norm, sweep_exp_tv_block_1_norm, sweep_exp_tv_block_2_norm, sweep_exp_tv_block_3_norm) = \
-             compute_exptected_tv(reconstructor, recon, Jac_x, True)
+             compute_exptected_tv(reconstructor, recon, Jac_x, cfg, True)
 
         plot_monotonicity_traces(
             np.logspace(-2, 2, 500), 

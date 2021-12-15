@@ -69,7 +69,7 @@ def coordinator(cfg : DictConfig) -> None:
         print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
 
         BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
-            'variance_init': cfg.mrglik.priors.variance_init})
+            'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
 
         recon = torch.from_numpy(recon[None, None])
         if cfg.linearize_weights:

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.linalg as linalg
 from collections.abc import Iterable
 from copy import deepcopy
+from itertools import chain
 from .priors import GPprior, RadialBasisFuncCov, NormalPrior
 
 class BayesianizeModel(nn.Module):
@@ -11,11 +12,13 @@ class BayesianizeModel(nn.Module):
         self,
         reconstructor,
         lengthscale_init,
-        variance_init
+        variance_init,
+        include_normal_priors=True,
         ):
         
         super().__init__()
         self.store_device = reconstructor.device
+        self.include_normal_priors = include_normal_priors
         self.gp_priors = nn.ModuleList([])
         self.normal_priors = nn.ModuleList([])
         self.ref_modules_under_gp_priors = []
@@ -85,7 +88,7 @@ class BayesianizeModel(nn.Module):
         def _add_priors_from_modules(modules, priors_kwards): 
 
             modules_gp_priors = self._find_modules_under_gp_prior(modules)
-            modules_normal_priors = self._find_modules_under_normal_prior(modules)
+            modules_normal_priors = self._find_modules_under_normal_prior(modules) if self.include_normal_priors else []
             if modules_gp_priors: self._add_gp_priors(modules_gp_priors, **priors_kwards)
             if modules_normal_priors: self._add_normal_priors(modules_normal_priors, 
                 **{'variance_init': priors_kwards['variance_init']})
@@ -124,6 +127,14 @@ class BayesianizeModel(nn.Module):
                 store_device = self.store_device)
         self.normal_priors.append(normal_prior)
         self.ref_modules_under_normal_priors.append(modules)
+
+    @property
+    def priors(self):
+        return chain(self.gp_priors, self.normal_priors)
+
+    @property
+    def ref_modules_under_priors(self):
+        return self.ref_modules_under_gp_priors + self.ref_modules_under_normal_priors
 
     def get_all_modules_under_prior(self):
         all_modules = []

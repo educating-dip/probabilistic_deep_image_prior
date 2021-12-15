@@ -50,12 +50,6 @@ def coordinator(cfg : DictConfig) -> None:
                     **dip_ray_trafo, 
                     cfg=cfg.net
                     )
-                all_modules_under_prior = (
-                        BayesianizeModel(
-                                reconstructor, **{
-                                    'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
-                                    'variance_init': cfg.mrglik.priors.variance_init})
-                        .get_all_modules_under_prior())
                 # reconstruction - learning MAP estimate weights
                 filtbackproj = filtbackproj.to(reconstructor.device)
                 cfg.mrglik.optim.scl_fct_gamma = observation.view(-1).shape[0]
@@ -64,6 +58,12 @@ def coordinator(cfg : DictConfig) -> None:
                     filtbackproj, 
                     example_image
                     )
+                bayesianize_model = BayesianizeModel(
+                        reconstructor, **{
+                            'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
+                            'variance_init': cfg.mrglik.priors.variance_init},
+                            include_normal_priors=cfg.mrglik.priors.include_normal_priors)
+                all_modules_under_prior = bayesianize_model.get_all_modules_under_prior()
                 torch.save(reconstructor.model.state_dict(),
                         './reconstructor_model_{}.pt'.format(i))
                 # estimate the Jacobian
@@ -80,8 +80,10 @@ def coordinator(cfg : DictConfig) -> None:
                 # opt-marginal-likelihood w/o predcp
                 block_priors = BlocksGPpriors(
                     reconstructor.model,
+                    bayesianize_model,
                     reconstructor.device,
                     cfg.mrglik.priors.lengthscale_init,
+                    cfg.mrglik.priors.variance_init,
                     lin_weights=None
                     )
                 noise_model_variance_obs_space_no_predcp = optim_marginal_lik_low_rank(
@@ -151,8 +153,10 @@ def coordinator(cfg : DictConfig) -> None:
                 cfg.mrglik.optim.include_predcp = True
                 block_priors = BlocksGPpriors(
                     reconstructor.model,
+                    bayesianize_model,
                     reconstructor.device,
                     cfg.mrglik.priors.lengthscale_init,
+                    cfg.mrglik.priors.variance_init,
                     lin_weights=None)
                 noise_model_variance_obs_space_predcp = optim_marginal_lik_low_rank(
                     cfg,

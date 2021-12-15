@@ -135,7 +135,8 @@ def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_
             BayesianizeModel(
                     reconstructor, **{
                         'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
-                        'variance_init': cfg.mrglik.priors.variance_init})
+                        'variance_init': cfg.mrglik.priors.variance_init},
+                        include_normal_priors=cfg.mrglik.priors.include_normal_priors)
             .get_all_modules_under_prior())
     map_weights = get_weight_block_vec(all_modules_under_prior).detach()
     ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)

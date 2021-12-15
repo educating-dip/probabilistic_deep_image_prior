@@ -9,3 +9,4 @@ optim:
 priors:
   lengthscale_init: 0.1
   variance_init: 1
+  include_normal_priors: True

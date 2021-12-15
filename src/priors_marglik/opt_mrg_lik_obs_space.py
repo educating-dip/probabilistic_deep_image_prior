@@ -10,7 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 from deep_image_prior import diag_gaussian_log_prob, tv_loss
 from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 
-
 def marginal_lik_predcp_linear_update(
     cfg, 
     block_priors, 
@@ -19,6 +18,8 @@ def marginal_lik_predcp_linear_update(
     ):
 
     _, model_prior_cov_list = submatrix_image_space_lin_model_prior_cov(block_priors, Jac_x)
+    if not cfg.mrglik.priors.include_normal_priors:
+        model_prior_cov_list = model_prior_cov_list[:len(block_priors.gp_priors)]
     expected_tv = []
     for cov_ff in model_prior_cov_list:
         succed = False
@@ -40,29 +41,32 @@ def marginal_lik_predcp_linear_update(
         expected_tv.append(tv_loss(samples.view(-1, *recon.shape)) / cfg.mrglik.optim.tv_samples)
 
     log_det_list = []
-    for i in range(block_priors.num_params):
+    for i, gp_prior in enumerate(block_priors.gp_priors):
 
-        assert block_priors.log_lengthscales[i].grad == None \
-            or block_priors.log_lengthscales[i].grad == 0
-        assert block_priors.log_variances[i].grad == None \
-            or block_priors.log_variances[i].grad == 0
+        assert gp_prior.cov.log_lengthscale.grad == None \
+            or gp_prior.cov.log_lengthscale.grad == 0
+        assert gp_prior.cov.log_variance.grad == None \
+            or gp_prior.cov.log_variance.grad == 0
 
         first_derivative = autograd.grad(expected_tv[i],
-                block_priors.log_lengthscales[i], retain_graph=True,
+                gp_prior.cov.log_lengthscale, retain_graph=True,
                 create_graph=True)[0]
         first_derivative_log_variances = autograd.grad(expected_tv[i],
-                block_priors.log_variances[i], allow_unused=True,
+                gp_prior.cov.log_variance, allow_unused=True,
                 retain_graph=True)[0]
         log_det = first_derivative.abs().log()
         log_det_list.append(log_det.detach())
-        second_derivative = autograd.grad(log_det, block_priors.log_lengthscales[i], retain_graph=True)[0]
-        second_derivative_log_variances = autograd.grad(log_det, block_priors.log_variances[i], allow_unused=True)[0]
+        second_derivative = autograd.grad(log_det, gp_prior.cov.log_lengthscale, retain_graph=True)[0]
+        second_derivative_log_variances = autograd.grad(log_det, gp_prior.cov.log_variance, allow_unused=True)[0]
         first_derivative = first_derivative.detach()
         second_derivative = second_derivative.detach()
-        block_priors.priors[i].zero_grad()
+        gp_prior.zero_grad()
         scaling_fct = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma
-        block_priors.log_lengthscales[i].grad = -(-first_derivative + second_derivative) * scaling_fct
-        block_priors.log_variances[i].grad = -(-first_derivative_log_variances + second_derivative_log_variances ) * scaling_fct
+        gp_prior.cov.log_lengthscale.grad = -(-first_derivative + second_derivative) * scaling_fct
+        gp_prior.cov.log_variance.grad = -(-first_derivative_log_variances + second_derivative_log_variances ) * scaling_fct
+
+    for normal_prior in block_priors.normal_priors:
+        pass  # TODO
     
     loss = scaling_fct * (torch.stack(expected_tv).sum().detach() - torch.stack(log_det_list).sum().detach())
     return loss
@@ -109,8 +113,9 @@ def optim_marginal_lik_low_rank(
         torch.zeros(1, device=device)
     )
     optimizer = \
-        torch.optim.Adam([{'params': block_priors.log_lengthscales, 'lr': cfg.mrglik.optim.lr},
-                          {'params': block_priors.log_variances, 'lr': cfg.mrglik.optim.lr},
+        torch.optim.Adam([{'params': block_priors.gp_log_lengthscales, 'lr': cfg.mrglik.optim.lr},
+                          {'params': block_priors.gp_log_variances, 'lr': cfg.mrglik.optim.lr},
+                          {'params': block_priors.normal_log_variances, 'lr': cfg.mrglik.optim.lr},
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
@@ -149,11 +154,15 @@ def optim_marginal_lik_low_rank(
             loss.backward()
             optimizer.step()
 
-            for k in range(block_priors.num_params):
-                writer.add_scalar('lengthscale_{}'.format(k), 
-                                torch.exp(block_priors.log_lengthscales[k]).item(), i)
-                writer.add_scalar('variance_{}'.format(k), 
-                                torch.exp(block_priors.log_variances[k]).item(), i)
+            for k, gp_log_lengthscale in enumerate(block_priors.gp_log_lengthscales):
+                writer.add_scalar('gp_lengthscale_{}'.format(k),
+                                torch.exp(gp_log_lengthscale).item(), i)
+            for k, gp_log_variance in enumerate(block_priors.gp_log_variances):
+                writer.add_scalar('gp_variance_{}'.format(k),
+                                torch.exp(gp_log_variance).item(), i)
+            for k, normal_log_variance in enumerate(block_priors.normal_log_variances):
+                writer.add_scalar('normal_variance_{}'.format(k),
+                                torch.exp(normal_log_variance).item(), i)
 
             writer.add_scalar('negative_MAP_MLL', loss.item() + predcp_loss.item(), i)
             writer.add_scalar('negative_MLL', loss.item(), i)

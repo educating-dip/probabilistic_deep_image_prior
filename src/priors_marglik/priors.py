@@ -104,3 +104,14 @@ class NormalPrior(nn.Module):
         mean = torch.zeros(self.kernel_size, device=self.store_device)
         m = Normal(loc=mean, scale=torch.exp(self.log_variance)**.5)
         return m.log_prob(x)
+
+    def cov_mat(self, return_cholesky=True):
+        # TODO check
+        eye = torch.eye(self.kernel_size).to(self.store_device)
+        fct = torch.exp(0.5 * self.log_variance) if return_cholesky else torch.exp(self.log_variance)
+        cov_mat = fct * eye
+        return cov_mat
+
+    def cov_log_det(self):
+        # TODO check
+        return self.log_variance * self.kernel_size
