@@ -56,41 +56,6 @@ def tv_loss_grad(x):
     
     return grad_tv_x + grad_tv_y
 
-# def set_all_weights(model, norm_layers, weights):
-#     """ set all NN weights """
-#     assert not isinstance(model, DataParallel)
-#     n_weights_all = 0
-#     for name, param in model.named_parameters():
-#         if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
-#             n_weights = param.numel()
-#             param.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(param))
-#             n_weights_all += n_weights
-
-# def set_all_weights_block(model, weights, include_block=['down', 'up']):
-#     """ set all NN weights """
-#     assert not isinstance(model, DataParallel)
-#     n_weights_all = 0
-#     for sect_name in include_block:
-#         group_blocks = getattr(model, sect_name)
-#         if isinstance(group_blocks, Iterable):
-#             for (_, block) in enumerate(group_blocks):
-#                 for layer in block.conv:
-#                     if isinstance(layer, torch.nn.Conv2d):
-#                         n_weights = layer.weight.numel()
-#                         layer.weight.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(layer.weight))
-#                         n_weights_all += n_weights
-
-# def get_weight_block_vec(model, include_block=['down', 'up']):
-#     ws = []
-#     for sect_name in include_block:
-#         group_blocks = getattr(model, sect_name)
-#         if isinstance(group_blocks, Iterable):
-#             for (_, block) in enumerate(group_blocks):
-#                 for layer in block.conv:
-#                     if isinstance(layer, torch.nn.Conv2d):
-#                         ws.append(layer.weight.flatten())
-#     return torch.cat(ws)
-
 def set_all_weights_block(modules, weights):
     n_weights_all = 0
     for layer in modules:
@@ -105,14 +70,6 @@ def get_weight_block_vec(modules):
         assert isinstance(layer, torch.nn.Conv2d)
         ws.append(layer.weight.flatten())
     return torch.cat(ws)
-
-# def get_weight_vec(model, norm_layers):
-#     ws = []
-#     for name, param in model.named_parameters():
-#         name = name.replace("module.", "")
-#         if 'weight' in name and name not in norm_layers and 'skip_conv' not in name:
-#             ws.append(param.flatten())
-#     return torch.cat(ws)
 
 def list_norm_layers(model):
 
