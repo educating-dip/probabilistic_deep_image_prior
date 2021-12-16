@@ -126,18 +126,12 @@ def list_norm_layers(model):
             norm_layers.append(name + '.bias')
     return norm_layers
 
-def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_trafos):
+def weights_linearization(cfg, bayesianise_model, filtbackproj, observation, ground_truth, reconstructor, ray_trafos):
 
-    x = x.to(reconstructor.device)
+    filtbackproj = filtbackproj.to(reconstructor.device)
     observation = observation.to(reconstructor.device)
     ground_truth = ground_truth.to(reconstructor.device)
-    all_modules_under_prior = (
-            BayesianizeModel(
-                    reconstructor, **{
-                        'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
-                        'variance_init': cfg.mrglik.priors.variance_init},
-                        include_normal_priors=cfg.mrglik.priors.include_normal_priors)
-            .get_all_modules_under_prior())
+    all_modules_under_prior = bayesianise_model.get_all_modules_under_prior()
     map_weights = get_weight_block_vec(all_modules_under_prior).detach()
     ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)
     ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
@@ -155,14 +149,14 @@ def weights_linearization(cfg, x, observation, ground_truth, reconstructor, ray_
     reconstructor.model.eval()
     with tqdm(range(cfg.lin_params.iterations)) as pbar:
         for i in pbar:
-            lin_pred = finite_diff_JvP(x, reconstructor.model, lin_w_fd, all_modules_under_prior).detach()
+            lin_pred = finite_diff_JvP(filtbackproj, reconstructor.model, lin_w_fd, all_modules_under_prior).detach()
             loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred), observation.to(reconstructor.device)).detach() \
                 + cfg.net.optim.gamma * tv_loss(lin_pred)
             v = log_homoGauss_grad(ray_trafo_module(lin_pred), observation, ray_trafo_module_adj).flatten() \
                 + cfg.net.optim.gamma * tv_loss_grad(lin_pred).flatten()
             optimizer.zero_grad()
             reconstructor.model.zero_grad()
-            to_grad = reconstructor.model(x)[0].flatten() * v
+            to_grad = reconstructor.model(filtbackproj)[0].flatten() * v
             to_grad.sum().backward()
             lin_w_fd.grad = agregate_flatten_weight_grad(all_modules_under_prior) + cfg.lin_params.wd * lin_w_fd.detach()
             optimizer.step()
