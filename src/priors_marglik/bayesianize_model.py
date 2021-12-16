@@ -34,7 +34,7 @@ class BayesianizeModel(nn.Module):
                 self.ref_modules_under_gp_priors
             )
         
-        self.ref_num_filters_per_modules_under_normal_priors = self._get_num_filters_under_priors(
+        self.ref_num_params_per_modules_under_normal_priors = self._get_num_filters_under_priors(
                 self.ref_modules_under_normal_priors
             )
 

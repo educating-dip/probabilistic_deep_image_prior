@@ -8,7 +8,7 @@ def _get_cov_from_modules(bayesianized_model):
         for _ in range(num_filters):
             cov_under_gp_prior.append(prior.cov.cov_mat(return_cholesky=False))
     cov_under_normal_prior = []
-    for num_params, prior in zip(bayesianized_model.ref_num_filters_per_modules_under_normal_priors, bayesianized_model.normal_priors): 
+    for num_params, prior in zip(bayesianized_model.ref_num_params_per_modules_under_normal_priors, bayesianized_model.normal_priors): 
         for _ in range(num_params): 
             cov_under_normal_prior.append(torch.exp(prior.log_variance))
     return torch.stack(cov_under_gp_prior), torch.stack(cov_under_normal_prior)
