@@ -56,19 +56,19 @@ class DownBlock(nn.Module):
                 nn.Conv2d(in_ch, out_ch, kernel_size,
                           stride=2, padding=to_pad),
                 nn.GroupNorm(num_channels=out_ch, num_groups=num_groups),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(out_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
                 nn.GroupNorm(num_channels=out_ch, num_groups=num_groups),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
         else:
             self.conv = nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, kernel_size,
                           stride=2, padding=to_pad),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(out_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
 
     def forward(self, x):
         x = self.conv(x)
@@ -84,12 +84,12 @@ class InBlock(nn.Module):
                 nn.Conv2d(in_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
                 nn.GroupNorm(num_channels=out_ch, num_groups=num_groups),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
         else:
             self.conv = nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
 
     def forward(self, x):
         x = self.conv(x)
@@ -109,29 +109,29 @@ class UpBlock(nn.Module):
                 nn.Conv2d(in_ch + skip_ch, out_ch, kernel_size, stride=1,
                           padding=to_pad),
                 nn.GroupNorm(num_channels=out_ch, num_groups=num_groups),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(out_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
                 nn.GroupNorm(num_channels=out_ch, num_groups=num_groups),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
         else:
             self.conv = nn.Sequential(
                 nn.Conv2d(in_ch + skip_ch, out_ch, kernel_size, stride=1,
                           padding=to_pad),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(out_ch, out_ch, kernel_size,
                           stride=1, padding=to_pad),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
 
         if use_norm:
             self.skip_conv = nn.Sequential(
                 nn.Conv2d(out_ch, skip_ch, kernel_size=1, stride=1),
                 nn.GroupNorm(num_channels=skip_ch, num_groups=1),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
         else:
             self.skip_conv = nn.Sequential(
                 nn.Conv2d(out_ch, skip_ch, kernel_size=1, stride=1),
-                nn.LeakyReLU(0.2, inplace=True))
+                nn.LeakyReLU(0.2))
 
         self.up = nn.Upsample(scale_factor=2, mode='bilinear',
                               align_corners=True)

@@ -5,10 +5,11 @@ import torch.nn.functional as F
 
 # replacing torch.nn.Conv2d
 class Conv2dBatchEnsemble(nn.Module):
-    def __init__(self, module, num_instances):
+    def __init__(self, module, num_instances, conv2d_fun=None):
         super().__init__()
         assert isinstance(module, nn.Conv2d)
         self.num_instances = num_instances
+        self.conv2d_fun = F.conv2d if conv2d_fun is None else conv2d_fun
 
         self.in_channels = module.in_channels
         self.out_channels = module.out_channels
@@ -43,10 +44,10 @@ class Conv2dBatchEnsemble(nn.Module):
         bias = bias.view(-1)  # (self.num_instances * C_out)
 
         if self.padding_mode != 'zeros':
-            out = F.conv2d(F.pad(input, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+            out = self.conv2d_fun(F.pad(input, self._reversed_padding_repeated_twice, mode=self.padding_mode),
                     weight, bias, self.stride,
                     (0, 0), self.dilation, self.num_instances)
-        out = F.conv2d(input, weight, bias, self.stride,
+        out = self.conv2d_fun(input, weight, bias, self.stride,
                 self.padding, self.dilation, self.num_instances)
 
         out = out.view(batch_size, self.num_instances, out_channels, *out.shape[2:])
@@ -71,7 +72,10 @@ class Conv2dBatchEnsemble(nn.Module):
         if self.padding_mode != 'zeros':
             s += ', padding_mode={padding_mode}'
         conv2d_s = s.format(**self.__dict__)
-        return 'Conv2d({}), num_instances={}'.format(conv2d_s, self.num_instances)
+        s = 'Conv2d({}), num_instances={}'.format(conv2d_s, self.num_instances)
+        if self.conv2d_fun is not F.conv2d:
+            s += ', conv2d_fun={}'.format(self.conv2d_fun)
+        return s
 
     def __setstate__(self, state):
         super().__setstate__(state)
