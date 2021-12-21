@@ -18,115 +18,11 @@ from linearized_weights.linearized_weights import finite_diff_JvP
 from scalable_linearised_laplace.batch_ensemble_unet import get_unet_batch_ensemble
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
 from scalable_linearised_laplace.fwAD import get_fwAD_model
+from scalable_linearised_laplace.jvp import (
+    finite_diff_JvP, finite_diff_JvP_batch_ensemble,
+    fwAD_JvP, fwAD_JvP_batch_ensemble, FwAD_JvP_PreserveAndRevertWeightsToParameters)
 from linearized_weights.conv2d_fwAD import Conv2dFwAD
 from priors_marglik import BayesianizeModel
-
-# note: after calling fwAD_JvP the weights are no longer
-# registered as nn.Parameters of the module; to revert this, call
-# revert_all_weights_block_to_parameters(modules) afterwards
-def fwAD_JvP(x, model, vec, modules, eps=None):
-
-    assert len(vec.shape) == 1
-    assert len(x.shape) == 4
-
-    model.eval()
-
-    with fwAD.dual_level():
-        set_all_weights_block_tangents(modules, vec)
-        out = model(x)[0]
-        JvP = fwAD.unpack_dual(out).tangent
-
-    return JvP
-
-# note: after calling fwAD_JvP_batch_ensemble the weights are no longer
-# registered as nn.Parameters of the module; to revert this, call
-# revert_all_weights_block_to_parameters(modules) afterwards
-def fwAD_JvP_batch_ensemble(x, model, vec, modules, eps=None):
-
-    assert len(vec.shape) == 2
-    assert len(x.shape) in (4, 5)
-
-    if len(x.shape) == 4:
-        x = torch.broadcast_to(x, (vec.shape[0],) + x.shape)  # insert instance dim
-
-    model.eval()
-
-    with fwAD.dual_level():
-        set_all_weights_block_tangents_batch_ensemble(modules, vec)
-        out = model(x)[0]
-        JvP = fwAD.unpack_dual(out).tangent
-
-    return JvP
-
-def set_all_weights_block_tangents(modules, tangents):
-    n_weights_all = 0
-    for layer in modules:
-        assert isinstance(layer, Conv2dFwAD)
-        n_weights = layer.weight.numel()
-        weight = layer.weight
-        delattr(layer, 'weight')
-        setattr(layer, 'weight', fwAD.make_dual(weight, tangents[n_weights_all:n_weights_all+n_weights].view_as(weight)))
-        n_weights_all += n_weights
-
-def set_all_weights_block_tangents_batch_ensemble(modules, tangents):
-    n_weights_all = 0
-    for layer in modules:
-        assert isinstance(layer, Conv2dBatchEnsemble)
-        n_weights = np.prod(layer.weight.shape[1:])  # dim 0 is instance dim
-        weight = layer.weight
-        delattr(layer, 'weight')
-        setattr(layer, 'weight', fwAD.make_dual(weight, tangents[:, n_weights_all:n_weights_all+n_weights].view_as(weight)))
-        n_weights_all += n_weights
-
-def revert_all_weights_block_to_parameters(modules):
-    for layer in modules:
-        assert isinstance(layer, (Conv2dFwAD, Conv2dBatchEnsemble))
-        layer.weight = torch.nn.Parameter(fwAD.unpack_dual(layer.weight).primal)
-
-def finite_diff_JvP_batch_ensemble(x, model, vec, modules, eps=None):
-
-    assert len(vec.shape) == 2
-    assert len(x.shape) in (4, 5)
-
-    if len(x.shape) == 4:
-        x = torch.broadcast_to(x, (vec.shape[0],) + x.shape)  # insert instance dim
-
-    model.eval()
-    with torch.no_grad():
-        map_weights = get_weight_block_vec_batch_ensemble(modules)
-
-        if eps is None:
-            torch_eps = torch.finfo(vec.dtype).eps
-            w_map_max = map_weights.abs().max().clamp(min=torch_eps)
-            v_max = vec.abs().max().clamp(min=torch_eps)
-            eps = np.sqrt(torch_eps) * (1 + w_map_max) / (2 * v_max)
-
-        w_plus = map_weights.clone().detach() + vec * eps
-        set_all_weights_block_batch_ensemble(modules, w_plus)
-        f_plus = model(x)[0]
-
-        w_minus = map_weights.clone().detach() - vec * eps
-        set_all_weights_block_batch_ensemble(modules, w_minus)
-        f_minus = model(x)[0]
-
-        JvP = (f_plus - f_minus) / (2 * eps)
-        set_all_weights_block_batch_ensemble(modules, map_weights)
-        return JvP
-
-def set_all_weights_block_batch_ensemble(modules, weights):
-    n_weights_all = 0
-    for layer in modules:
-        assert isinstance(layer, Conv2dBatchEnsemble)
-        n_weights = np.prod(layer.weight.shape[1:])  # dim 0 is instance dim
-        layer.weight.copy_(weights[:, n_weights_all:n_weights_all+n_weights].view_as(layer.weight))
-        n_weights_all += n_weights
-
-def get_weight_block_vec_batch_ensemble(modules):
-    ws = []
-    for layer in modules:
-        assert isinstance(layer, Conv2dBatchEnsemble)
-        ws.append(layer.weight.view(layer.num_instances, -1))
-    return torch.cat(ws, dim=1)
 
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -152,10 +48,10 @@ def coordinator(cfg : DictConfig) -> None:
     be_model, be_module_mapping = get_unet_batch_ensemble(model, num_instances, return_module_mapping=True)
     be_modules = [be_module_mapping[m] for m in modules]
 
-    fwAD_model, fwAD_module_mapping = get_fwAD_model(model, return_module_mapping=True)
+    fwAD_model, fwAD_module_mapping = get_fwAD_model(model, return_module_mapping=True, use_copy='share_parameters')
     fwAD_modules = [fwAD_module_mapping[m] for m in modules]
 
-    fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True)
+    fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
     fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
     x_input = torch.rand((1, 1,) + ray_trafo['reco_space'].shape, device=reconstructor.device)
@@ -226,26 +122,26 @@ def coordinator(cfg : DictConfig) -> None:
         # plt.colorbar()
         # plt.show()
 
-    x_fwAD_be_tests = []
-    for idx in tqdm(range(0, w_tests.shape[0], num_instances)):
-        w_tests_batch = w_tests[idx:idx+num_instances]
-        pad_instances = 0
-        if w_tests_batch.shape[0] < num_instances:
-            pad_instances = num_instances - w_tests_batch.shape[0]
-            w_tests_batch = torch.cat([
-                    w_tests_batch,
-                    torch.zeros(
-                            num_instances - w_tests_batch.shape[0], *w_tests_batch.shape[1:],
-                            dtype=w_tests_batch.dtype, device=w_tests_batch.device)])
-        # print(w_tests_batch.shape)
-        x_fwAD_be_tests_batch = fwAD_JvP_batch_ensemble(x_input, fwAD_be_model, w_tests_batch, fwAD_be_modules).detach().view(num_instances, -1)
-        # print(x_be_tests_batch.shape)
-        if pad_instances > 0:
-            x_fwAD_be_tests_batch = x_fwAD_be_tests_batch[:-pad_instances]
-        x_fwAD_be_tests.append(x_fwAD_be_tests_batch)
-    x_fwAD_be_tests = torch.cat(x_fwAD_be_tests)
+    with FwAD_JvP_PreserveAndRevertWeightsToParameters(fwAD_be_modules):
+        x_fwAD_be_tests = []
+        for idx in tqdm(range(0, w_tests.shape[0], num_instances)):
+            w_tests_batch = w_tests[idx:idx+num_instances]
+            pad_instances = 0
+            if w_tests_batch.shape[0] < num_instances:
+                pad_instances = num_instances - w_tests_batch.shape[0]
+                w_tests_batch = torch.cat([
+                        w_tests_batch,
+                        torch.zeros(
+                                num_instances - w_tests_batch.shape[0], *w_tests_batch.shape[1:],
+                                dtype=w_tests_batch.dtype, device=w_tests_batch.device)])
+            # print(w_tests_batch.shape)
+            x_fwAD_be_tests_batch = fwAD_JvP_batch_ensemble(x_input, fwAD_be_model, w_tests_batch, fwAD_be_modules).detach().view(num_instances, -1)
+            # print(x_be_tests_batch.shape)
+            if pad_instances > 0:
+                x_fwAD_be_tests_batch = x_fwAD_be_tests_batch[:-pad_instances]
+            x_fwAD_be_tests.append(x_fwAD_be_tests_batch)
+        x_fwAD_be_tests = torch.cat(x_fwAD_be_tests)
 
-    revert_all_weights_block_to_parameters(fwAD_be_modules)
     # print(list(x for x, _ in fwAD_be_model.named_parameters()))
 
     for i in range(min(10, w_tests.shape[0])):

@@ -124,19 +124,19 @@ BATCH_ENSEMBLE_KEEP = (
 
 # model is considered a container that can handle multi-instance input and
 # output, only its submodules are replaced
-def get_batch_ensemble_model(model, num_instances, return_module_mapping=False, copy=True, **kwargs):
-    if copy:
+def get_batch_ensemble_model(model, num_instances, return_module_mapping=False, use_copy=True, **kwargs):
+    if use_copy:
         be_model = deepcopy(model)
 
     if return_module_mapping:
 
-        if copy:
+        if use_copy:
             module_copies_to_orig_mapping = {copy: old for copy, old in zip(be_model.modules(), model.modules())}
 
         module_mapping = {}
         replace_with_batch_ensemble_layers(be_model, num_instances, out_module_mapping=module_mapping, **kwargs)
 
-        if copy:
+        if use_copy:
             # translate module_copies_mapping ("copy -> new") to original modules "old -> new"
             module_mapping = {module_copies_to_orig_mapping[copy]: new for copy, new in module_mapping.items()}
 
