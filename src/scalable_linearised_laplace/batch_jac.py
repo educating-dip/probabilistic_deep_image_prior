@@ -12,5 +12,5 @@ def vec_jac_mul_batch(hooked_model, filtbackproj, v):
     f.backward(v) # (f * v).sum(dim=-1).sum(dim=0).backward()
     v_jac_mul = aggregate_flatten_weight_batch_grad(batch_size=batch_size, store_device=filtbackproj.device).detach()
     clear_grads()
-    # TODO: assert v_jac_mul.shape == batch_size, num_params_under_priors
+    # TODO: assert v_jac_mul.shape == (batch_size, hooked_model.num_params_under_priors)
     return v_jac_mul

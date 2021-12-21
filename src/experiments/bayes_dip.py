@@ -13,7 +13,6 @@ from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
-from scalable_linearised_laplace import matrix_with_prior_cov
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -69,12 +68,12 @@ def coordinator(cfg : DictConfig) -> None:
         print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
         print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
 
-        bayesianise_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
+        bayesianized_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
             'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
-        
+
         recon = torch.from_numpy(recon[None, None])
         if cfg.linearize_weights:
-            optim_lin_params, lin_pred = weights_linearization(cfg, bayesianise_model, filtbackproj, observation, example_image, reconstructor, ray_trafos)
+            optim_lin_params, lin_pred = weights_linearization(cfg, bayesianized_model, filtbackproj, observation, example_image, reconstructor, ray_trafos)
             print('linear reconstruction sample {:d}'.format(i))
             print('PSNR:', PSNR(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
             print('SSIM:', SSIM(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))

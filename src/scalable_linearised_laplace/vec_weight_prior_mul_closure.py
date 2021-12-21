@@ -8,7 +8,7 @@ def _compose_cov_from_modules(bayesianized_model):
             bayesianized_model.ref_num_filters_per_modules_under_gp_priors,
                 bayesianized_model.gp_priors):
         cov_under_gp_prior.append(
-                prior.cov.cov_mat(return_cholesky=False).repeat(num_filters, 1, 1)
+                prior.cov.cov_mat(return_cholesky=False).expand(num_filters, 9, 9)
             )
 
     cov_under_normal_prior = []
@@ -16,7 +16,7 @@ def _compose_cov_from_modules(bayesianized_model):
             bayesianized_model.ref_num_params_per_modules_under_normal_priors, 
                 bayesianized_model.normal_priors): 
         cov_under_normal_prior.append(
-                torch.exp(prior.log_variance).repeat(num_params, 1, 1) # TODO: https://pytorch.org/docs/stable/generated/torch.Tensor.expand.html
+                torch.exp(prior.log_variance).expand(num_params, 1, 1)
                 )
     
     return torch.cat(cov_under_gp_prior), torch.cat(cov_under_normal_prior)
@@ -37,7 +37,7 @@ def vec_weight_prior_cov_mul(bayesianized_model, v):
     normal_v = v[:, (cov_under_gp_prior.shape[0] * cov_under_gp_prior.shape[-1]):]
     v_mul_cov_under_gp_prior = _fast_prior_cov_mul(gp_v, cov_under_gp_prior)
     v_mul_cov_under_normal_prior = _fast_prior_cov_mul(normal_v, cov_under_normal_prior)
-    # TODO: assert v.shape[1] == bayesianized_model.num_params_under_priors
+    assert v.shape[1] == bayesianized_model.num_params_under_priors
     v_Sigma_params_mul = torch.cat([v_mul_cov_under_gp_prior, v_mul_cov_under_normal_prior], dim=-1)
-    # TODO: assert v_Sigma_params_mul.shape == v.shape[0], bayesianized_model.num_params_under_priors
+    assert v_Sigma_params_mul.shape == (v.shape[0], bayesianized_model.num_params_under_priors)
     return v_Sigma_params_mul

@@ -135,6 +135,11 @@ class BayesianizeModel(nn.Module):
     @property
     def ref_modules_under_priors(self):
         return self.ref_modules_under_gp_priors + self.ref_modules_under_normal_priors
+    
+    @property
+    def num_params_under_priors(self): 
+        return sum(self.ref_num_filters_per_modules_under_gp_priors) * 3**2 + \
+                sum(self.ref_num_params_per_modules_under_normal_priors)
 
     def get_all_modules_under_prior(self):
         all_modules = []
