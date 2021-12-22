@@ -6,8 +6,10 @@ optim:
   scl_fct_gamma: None
   scaling_fct: 2
   tv_samples: 1000
-  use_fwAD_for_jvp: True
 priors:
   lengthscale_init: 0.1
   variance_init: 1
   include_normal_priors: True
+impl:
+  use_fwAD_for_jvp: True
+  vec_batch_size: 2

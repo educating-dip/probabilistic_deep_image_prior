@@ -78,7 +78,7 @@ def clear_layer_activations(layer: nn.Module) -> None:
     if hasattr(layer, 'activations'):
         del layer.activations
 
-def add_batch_grad_hooks(model: nn.Module, include_grad_bias: bool = False, loss_type: str = 'sum') -> None:
+def add_batch_grad_hooks(model: nn.Module, modules: list, include_grad_bias: bool = False, loss_type: str = 'sum') -> None:
     """
     Adds hooks to model to save activations and backprop values.
     The hooks will
@@ -101,8 +101,7 @@ def add_batch_grad_hooks(model: nn.Module, include_grad_bias: bool = False, loss
 
     clear_grads()
     handles = []
-    all_modules_under_prior = model.get_all_modules_under_prior()
-    for layer in all_modules_under_prior:
+    for layer in modules:
         if _layer_type(layer) in _supported_layers:
             handles.append(layer.register_forward_hook(_capture_activations))
             handles.append(layer.register_backward_hook(generate_batch_grad_hook(loss_type)))
