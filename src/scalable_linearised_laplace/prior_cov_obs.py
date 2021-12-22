@@ -12,10 +12,9 @@ def agregate_flatten_weight_grad(modules):
         assert isinstance(layer, torch.nn.Conv2d)
         grads.append(layer.weight.grad.flatten())
     return torch.cat(grads)
-
+# reference for testing
 def vec_jac_mul_single(model, modules, filtbackproj, v):
 
-    jac = []
     model.eval()
     f = model(filtbackproj)[0]
     model.zero_grad()
@@ -27,13 +26,12 @@ def vec_jac_mul_single(model, modules, filtbackproj, v):
 # multiply v with Kyy and add sigma_y * v
 def prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, v, log_noise_model_variance_obs, use_fwAD_for_jvp=True):
     v_image = ray_trafos['ray_trafo_module_adj'](v)
-    image_shape = v_image.shape
-
-    # v_image = v_image.view(v_image.shape[0], -1)
-    # v_params = vec_jac_mul_batch(hooked_model, filtbackproj, v_image)
-    v_params_list = [vec_jac_mul_single(hooked_model, bayesianized_model.get_all_modules_under_prior(), filtbackproj, v_image_i[None]) for v_image_i in v_image]
-    v_params = torch.stack(v_params_list)
-
+    # image_shape = v_image.shape
+    v_image = v_image.view(v_image.shape[0], -1)
+    v_params = vec_jac_mul_batch(hooked_model, filtbackproj, v_image, bayesianized_model)
+    # alternative single-batch jacobian (reference for testing) 
+    # v_params_list = [vec_jac_mul_single(hooked_model, bayesianized_model.get_all_modules_under_prior(), filtbackproj, v_image_i[None]) for v_image_i in v_image]
+    # v_params = torch.stack(v_params_list)
     v_params = vec_weight_prior_cov_mul(bayesianized_model, v_params)
     if use_fwAD_for_jvp:
         v_image = fwAD_JvP_batch_ensemble(filtbackproj, be_model, v_params, be_modules)

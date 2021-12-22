@@ -12,11 +12,10 @@ from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
-from linearized_weights import weights_linearization
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
-        add_batch_grad_hooks, remove_batch_grad_hooks, prior_cov_obs_mat_mul,
-        get_unet_batch_ensemble, get_fwAD_model, vec_weight_prior_cov_mul)
+        add_batch_grad_hooks, prior_cov_obs_mat_mul,
+        get_unet_batch_ensemble, get_fwAD_model)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -75,12 +74,8 @@ def coordinator(cfg : DictConfig) -> None:
         bayesianized_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
             'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
         modules = bayesianized_model.get_all_modules_under_prior()
-
         v = observation.repeat(cfg.mrglik.impl.vec_batch_size, 1, 1, 1).to(reconstructor.device)
-        print(v.shape)
-
         log_noise_model_variance_obs = torch.tensor(0.).to(reconstructor.device)
-
         compare_with_assembled_jac_mat_mul = cfg.name in ['mnist', 'kmnist']
 
         if compare_with_assembled_jac_mat_mul:
@@ -100,7 +95,7 @@ def coordinator(cfg : DictConfig) -> None:
 
             Kyy = block_priors.matrix_prior_cov_mul(jac) @ jac.transpose(1, 0)
             v_image_assembled_jac = v_image_assembled_jac @ Kyy
-            # alternative:
+            # alternative implementation:
             # v_params_assembled_jac = v_image_assembled_jac @ jac
             # print('v_params_assembled_jac', v_params_assembled_jac[:, :10])
             # v_params_assembled_jac = block_priors.matrix_prior_cov_mul(v_params_assembled_jac)
@@ -118,8 +113,6 @@ def coordinator(cfg : DictConfig) -> None:
         fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
-        # print(fwAD_be_model)
-
         ray_trafos['ray_trafo_module'].to(reconstructor.device)
         ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
 
@@ -131,9 +124,7 @@ def coordinator(cfg : DictConfig) -> None:
             v_obs = prior_cov_obs_mat_mul(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, be_model, be_modules, v, log_noise_model_variance_obs, use_fwAD_for_jvp=False)
 
         if compare_with_assembled_jac_mat_mul:
-            # print(torch.max(torch.abs(v_obs - v_obs_assembled_jac)))
             print('asserting result is close to the one with assembled jacobian matrix:')
-            breakpoint()
             assert torch.allclose(v_obs, v_obs_assembled_jac)
             print('passed')
         else:

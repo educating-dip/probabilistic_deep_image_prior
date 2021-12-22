@@ -7,7 +7,7 @@ from opt_einsum import contract
 _supported_layers = ['Linear', 'Conv2d']  # Supported layer class types
 _hooks_disabled: bool = False           # work-around for https://github.com/pytorch/pytorch/issues/25723
 _preserve_graph: bool = False
-_grad_list = []
+_grad_list = {}
 
 def get_grad_list():
     return _grad_list
@@ -15,7 +15,7 @@ def get_grad_list():
 def clear_grads() -> None:
     """Delete external dictionary containing gradients"""
     global _grad_list
-    _grad_list = []
+    _grad_list = {}
 
 def disable_batch_grad_hooks() -> None:
     """
@@ -140,9 +140,9 @@ def generate_batch_grad_hook(loss_type: str = 'sum'):
         
         if layer_type == 'Linear':
             
-            _grad_list.append(linear_batchgrad(acts, grads))
+            _grad_list[layer.weight] = linear_batchgrad(acts, grads)
             if inc_grad_bias: 
-                _grad_list.append(linear_batchgrad_bias(grads))
+                _grad_list[layer.bias] = linear_batchgrad_bias(grads)
                         
         elif layer_type == 'Conv2d':
             acts = torch.nn.functional.unfold(acts, layer.kernel_size, padding=layer.padding, stride=layer.stride)
@@ -150,9 +150,9 @@ def generate_batch_grad_hook(loss_type: str = 'sum'):
             grad1 = conv2d_batchgrad(acts, grads)
             shape = [n] + list(layer.weight.shape)
             
-            _grad_list.append(grad1.reshape(shape))
+            _grad_list[layer.weight] = grad1.reshape(shape)
             if inc_grad_bias: 
-                _grad_list.append(conv2d_batchgrad_bias(acts, grads))
+                _grad_list[layer.bias] = conv2d_batchgrad_bias(acts, grads)
                 
         clear_layer_activations(layer)
         
@@ -170,11 +170,11 @@ def conv2d_batchgrad(acts, grads):
 def conv2d_batchgrad_bias(acts, grads):
     return torch.sum(grads, dim=2)
 
-def aggregate_flatten_weight_batch_grad(batch_size, store_device):
+def aggregate_flatten_weight_batch_grad(batch_size, modules, store_device):
     # adapted version from linearized_laplace/jac.py/agregate_flatten_weight_grad
     
     grad_list = get_grad_list()
     aggregate_grads = []
-    for grad_vec in grad_list:
-        aggregate_grads.append(grad_vec.flatten().to(store_device))
-    return torch.cat(aggregate_grads, dim=0).reshape(batch_size, -1)
+    for module in modules:
+        aggregate_grads.append(grad_list[module.weight].reshape(batch_size, -1).to(store_device)) # hard-coded disregarding biases 
+    return torch.cat(aggregate_grads, dim=1)
