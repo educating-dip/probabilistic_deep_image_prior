@@ -14,7 +14,7 @@ from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
-        add_batch_grad_hooks, prior_cov_obs_mat_mul,
+        add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat,
         get_unet_batch_ensemble, get_fwAD_model)
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -77,6 +77,7 @@ def coordinator(cfg : DictConfig) -> None:
         v = observation.repeat(cfg.mrglik.impl.vec_batch_size, 1, 1, 1).to(reconstructor.device)
         log_noise_model_variance_obs = torch.tensor(0.).to(reconstructor.device)
         compare_with_assembled_jac_mat_mul = cfg.name in ['mnist', 'kmnist']
+        test_assembled_cov_obs_mat = cfg.name in ['mnist', 'kmnist']
 
         if compare_with_assembled_jac_mat_mul:
             jac = compute_jacobian_single_batch(
@@ -129,6 +130,22 @@ def coordinator(cfg : DictConfig) -> None:
             print('passed')
         else:
             print('did not assemble jacobian matrix')
+
+        if test_assembled_cov_obs_mat:
+            if cfg.mrglik.impl.use_fwAD_for_jvp:
+                print('using forward-mode AD')
+                cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
+            else:
+                print('using finite differences')
+                cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, be_model, be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=False)
+            v_obs_assembled_cov_obs_mat = (v.view(v.shape[0], -1) @ cov_obs_mat).view(v.shape)
+
+            if compare_with_assembled_jac_mat_mul:
+                print('asserting result via assembled cov obs mat is close to the one with assembled jacobian matrix:')
+                assert torch.allclose(v_obs_assembled_cov_obs_mat, v_obs_assembled_jac)
+                print('passed')
+            else:
+                print('did not assemble jacobian matrix')
 
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
 
