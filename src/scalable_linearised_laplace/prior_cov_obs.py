@@ -52,22 +52,14 @@ def get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_m
     obs_numel = np.prod(obs_shape)
     rows = []
     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
-    # full batches
     for i in range(0, obs_numel, vec_batch_size):
         v[:] = 0.
-        # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel)
+        # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
         rows_batch = prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, v, log_noise_model_variance_obs, use_fwAD_for_jvp=use_fwAD_for_jvp)
         rows_batch = rows_batch.view(vec_batch_size, -1)
-        rows.append(rows_batch)
-    # last batch
-    last_vec_batch_size = obs_numel % vec_batch_size
-    if last_vec_batch_size > 0:
-        v = v[:last_vec_batch_size]
-        v[:] = 0.
-        v.view(last_vec_batch_size, -1)[:, -last_vec_batch_size:].fill_diagonal_(1.)
-        rows_batch = prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, v, log_noise_model_variance_obs, use_fwAD_for_jvp=use_fwAD_for_jvp)
-        rows_batch = rows_batch.view(vec_batch_size, -1)
+        if i+vec_batch_size > obs_numel:  # last batch
+            rows_batch = rows_batch[:obs_numel%vec_batch_size]
         rows.append(rows_batch)
     cov_obs_mat = torch.cat(rows, dim=0)
     return cov_obs_mat
