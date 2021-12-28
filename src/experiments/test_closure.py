@@ -1,4 +1,6 @@
 import os
+import time
+import numpy as np
 from itertools import islice
 import hydra
 from omegaconf import DictConfig
@@ -15,12 +17,31 @@ from priors_marglik import BayesianizeModel
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat,
-        get_unet_batch_ensemble, get_fwAD_model)
+        get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad)
+
+def check_hyperparams_grad(block_priors, Kyy):
+    
+    block_priors.zero_grad()
+    sign, objective = torch.linalg.slogdet(Kyy)
+    assert sign > 0
+    objective.backward()
+    grads = {}
+    for hyper_params in block_priors.gp_log_lengthscales + block_priors.gp_log_variances + block_priors.normal_log_variances:
+        grads[hyper_params] = hyper_params.grad
+    return grads
+
+def compare_dicts(dict1, dict2): 
+    for key1 in dict1: 
+        if key1 in dict2:
+            atol = 1e-03
+            if not torch.allclose(dict1[key1], dict2[key1], rtol=1e-05, atol=atol):
+                print('test tol {} failed: hyperparam ref:{:.4f}, est: {:.4f}, abs. diff. {:.4f}'.format(
+                    atol, dict1[key1].item(), dict2[key1].item(), np.abs(dict1[key1].item()-dict2[key1].item())))
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
-    ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True)
+    ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
     ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'],
                  'reco_space': ray_trafos['space'],
@@ -94,8 +115,9 @@ def coordinator(cfg : DictConfig) -> None:
                     lin_weights=None)
             v_image_assembled_jac = ray_trafos['ray_trafo_module_adj'](v).view(v.shape[0], -1)
 
-            Kyy = block_priors.matrix_prior_cov_mul(jac) @ jac.transpose(1, 0)
-            v_image_assembled_jac = v_image_assembled_jac @ Kyy
+            Kxx = block_priors.matrix_prior_cov_mul(jac) @ jac.transpose(1, 0)
+            v_image_assembled_jac = v_image_assembled_jac @ Kxx
+            
             # alternative implementation:
             # v_params_assembled_jac = v_image_assembled_jac @ jac
             # print('v_params_assembled_jac', v_params_assembled_jac[:, :10])
@@ -105,6 +127,8 @@ def coordinator(cfg : DictConfig) -> None:
 
             v_obs_assembled_jac = ray_trafos['ray_trafo_module'](v_image_assembled_jac.view(v.shape[0], *example_image.shape[1:]))
             v_obs_assembled_jac = v_obs_assembled_jac + v * torch.exp(log_noise_model_variance_obs)
+            A = torch.from_numpy(ray_trafos['ray_trafo_mat']).cuda().view(410, 784)
+            Kyy = A @ Kxx @ A.T + torch.exp(log_noise_model_variance_obs) * torch.eye(A.shape[0], device=A.device)
 
         add_batch_grad_hooks(reconstructor.model, modules)
 
@@ -148,6 +172,13 @@ def coordinator(cfg : DictConfig) -> None:
                 print('did not assemble jacobian matrix')
 
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
+
+    # testing exact Hessian posterior logdet grads w.r.t. hyperparams
+    refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
+    start = time.time()
+    exact_hyperparams_grads = compute_exact_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
+    print("time \s:", time.time() - start)
+    compare_dicts(refs_hyperparams_grads, exact_hyperparams_grads)
 
 if __name__ == '__main__':
     coordinator()

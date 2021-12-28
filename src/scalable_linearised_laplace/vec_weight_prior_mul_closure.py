@@ -33,6 +33,10 @@ def _fast_prior_cov_mul(v, sliced_cov_mat):
 def vec_weight_prior_cov_mul(bayesianized_model, v):
 
     cov_under_gp_prior, cov_under_normal_prior = _compose_cov_from_modules(bayesianized_model) # num_filts x kernel_size^2 x kernel_size^2, num_filts x 1 x 1
+    return vec_weight_prior_cov_mul_base(bayesianized_model, cov_under_gp_prior, cov_under_normal_prior, v)
+
+def vec_weight_prior_cov_mul_base(bayesianized_model, cov_under_gp_prior, cov_under_normal_prior, v):
+
     gp_v = v[:, :(cov_under_gp_prior.shape[0] * cov_under_gp_prior.shape[-1])]
     normal_v = v[:, (cov_under_gp_prior.shape[0] * cov_under_gp_prior.shape[-1]):]
     v_mul_cov_under_gp_prior = _fast_prior_cov_mul(gp_v, cov_under_gp_prior)
