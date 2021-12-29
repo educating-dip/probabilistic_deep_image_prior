@@ -37,7 +37,8 @@ def gen_direct_normal_centering_MLE_objective(y, marginal_x_std, projector):
     
     def direct_normal_centering_MLE_objective(params):
         
-        noise_std = 0.1
+
+        noise_std = 0.1 * jnp.abs(y).mean()
         x_mean = 0.1307
         
         x = sigmoid(params['x']) # constrain to [0, 1]
@@ -54,7 +55,7 @@ def gen_direct_TV_MLE_objective(y, lambd, projector):
     
     def direct_TV_MLE_objective(params):
         
-        noise_std = 0.1
+        noise_std = 0.1 * jnp.abs(y).mean()
         
         x = sigmoid(params['x']) # constrain to [0, 1]
         side_size = int(x.shape[0] ** 0.5)
@@ -70,7 +71,7 @@ def gen_direct_predcp_TV_MLE_objective(y, lambd, marginal_x_std, projector):
     # here we optimise x and AR_p simultaneously 
     def direct_TV_MLE_objective(params):
         
-        noise_std = 0.1
+        noise_std = 0.1 * jnp.abs(y).mean()
         x_mean = 0.1307
         
         x = sigmoid(params['x']) # constrain to [0, 1]
