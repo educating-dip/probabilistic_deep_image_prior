@@ -5,4 +5,5 @@ from .jvp import fwAD_JvP, fwAD_JvP_batch_ensemble, preserve_all_weights_block_s
 from .prior_cov_obs import prior_cov_obs_mat_mul, get_prior_cov_obs_mat
 from .batch_ensemble_unet import get_unet_batch_ensemble
 from .fwAD import get_fwAD_model
-from .log_det_grad import compute_exact_log_det_grad
+from .log_det_grad import compute_exact_log_det_grad, compose_masked_cov_grad_from_modules
+from .approx_log_det_grad import generate_closure, stochastic_LQ_logdet_grad, generate_probes, compute_approx_log_det_grad

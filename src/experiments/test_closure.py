@@ -17,7 +17,8 @@ from priors_marglik import BayesianizeModel
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat,
-        get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad)
+        get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, 
+        generate_closure, generate_probes, stochastic_LQ_logdet_grad, compute_approx_log_det_grad)
 
 def check_hyperparams_grad(block_priors, Kyy):
     
@@ -128,7 +129,7 @@ def coordinator(cfg : DictConfig) -> None:
             v_obs_assembled_jac = ray_trafos['ray_trafo_module'](v_image_assembled_jac.view(v.shape[0], *example_image.shape[1:]))
             v_obs_assembled_jac = v_obs_assembled_jac + v * torch.exp(log_noise_model_variance_obs)
             A = torch.from_numpy(ray_trafos['ray_trafo_mat']).cuda().view(410, 784)
-            Kyy = A @ Kxx @ A.T + torch.exp(log_noise_model_variance_obs) * torch.eye(A.shape[0], device=A.device)
+            Kyy = A @ Kxx @ A.T + torch.exp(log_noise_model_variance_obs) * torch.eye(A.shape[0], device=A.device) # TODO: ask Johannes 
 
         add_batch_grad_hooks(reconstructor.model, modules)
 
@@ -170,8 +171,14 @@ def coordinator(cfg : DictConfig) -> None:
                 print('passed')
             else:
                 print('did not assemble jacobian matrix')
-
+ 
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
+
+    approx_hyperparams_grads = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True, jacobi_vector=cov_obs_mat.diag())
+    print(approx_hyperparams_grads)
+
+    # check this with Johannes
+    # diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size)
 
     # testing exact Hessian posterior logdet grads w.r.t. hyperparams
     refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
@@ -179,6 +186,7 @@ def coordinator(cfg : DictConfig) -> None:
     exact_hyperparams_grads = compute_exact_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
     print("time \s:", time.time() - start)
     compare_dicts(refs_hyperparams_grads, exact_hyperparams_grads)
+    print(exact_hyperparams_grads)
 
 if __name__ == '__main__':
     coordinator()

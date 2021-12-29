@@ -39,7 +39,7 @@ def _construct_grad_list_from_modules(bayesianized_model):
                 _get_normal_prior_mrg_variances_grad(bayesianized_model)
                 )
 
-def _compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs):
+def compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs):
 
     gp_priors_lengthscales_grad, gp_priors_mrg_var_grad, normal_priors_mrg_var_grad = _construct_grad_list_from_modules(bayesianized_model)
 
@@ -89,7 +89,7 @@ def compute_exact_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, hoo
     cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=use_fwAD_for_jvp)
     cov_obs_mat_inv = torch.inverse(cov_obs_mat)
     del cov_obs_mat
-    gp_priors_grad_dict, normal_priors_grad_dict, log_noise_variance_obs_grad_dict = _compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs)
+    gp_priors_grad_dict, normal_priors_grad_dict, log_noise_variance_obs_grad_dict = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs)
     grads = {}
     
     for gp_prior in bayesianized_model.gp_priors:
