@@ -54,7 +54,7 @@ optimisation_stop_length = 1000
 
 # %% logging structures
 
-savedir = '../save/Gaussian_HMC/'
+savedir = '../save/TV_HMC/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
@@ -64,10 +64,13 @@ test_result_dict = {}
 
 # %% Choose method to run
 
-sampling_model = direct_model_normal_centering_prior
-optimisation_objective_gen = gen_direct_normal_centering_MLE_objective
-parameter_vector = prior_std_list
+sampling_model = direct_model_tv_prior
+optimisation_objective_gen = gen_direct_TV_MLE_objective
+parameter_vector = TV_lambda_list
 
+# sampling_model = direct_model_normal_centering_prior
+# optimisation_objective_gen = gen_direct_normal_centering_MLE_objective
+# parameter_vector = prior_std_list
 
 # %% Find hyperparameters
 
