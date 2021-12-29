@@ -17,8 +17,7 @@ from priors_marglik import BayesianizeModel
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat,
-        get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, 
-        generate_closure, generate_probes, stochastic_LQ_logdet_grad, compute_approx_log_det_grad)
+        get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, compute_approx_log_det_grad)
 
 def check_hyperparams_grad(block_priors, Kyy):
     
