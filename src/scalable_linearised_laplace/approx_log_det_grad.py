@@ -4,6 +4,7 @@ from gpytorch.utils import StochasticLQ, linear_cg
 from .prior_cov_obs import prior_cov_obs_mat_mul
 from .log_det_grad import compose_masked_cov_grad_from_modules
 
+
 def generate_probes(side_length, num_random_probes, dtype=None, device=None, jacobi_vector=None):
     probe_vectors = torch.empty(side_length, num_random_probes, dtype=dtype, device=device)
     probe_vectors.bernoulli_().mul_(2).add_(-1)
@@ -12,11 +13,13 @@ def generate_probes(side_length, num_random_probes, dtype=None, device=None, jac
         probe_vectors *= jacobi_vector.pow(0.5).unsqueeze(1)
     return probe_vectors  # side_length, num_random_probes
 
+
 def generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, 
         be_model, be_modules, log_noise_model_variance_obs, vec_batch_size, 
         masked_cov_grad_tuple=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True):
 
     def closure(v):
+        # takes input (410 x batchsize)
         v = v.T.view(vec_batch_size, 1, 10, 41)
         out = prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, 
             be_model, be_modules, v, log_noise_model_variance_obs, masked_cov_grad_tuple=masked_cov_grad_tuple,
@@ -25,11 +28,14 @@ def generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model,
         return out.T
     return closure
 
-def stochastic_LQ_logdet_grad(closure, grad_closure, probe_vectors, side_length, vec_batch_size, max_cg_iter, tolerance, jacobi_vector=None):
+
+def stochastic_LQ_logdet_and_solves(closure, probe_vectors, max_cg_iter, tolerance, jacobi_vector=None):
 
     num_random_probes = probe_vectors.shape[1]
+    side_length = probe_vectors.shape[0]
     probe_vector_norms = torch.norm(probe_vectors, 2, dim=-2, keepdim=True)  # 1, num_random_probes; for rademacher random variates the norm is equal to sqrt(side_length)
     probe_vectors_scaled = probe_vectors.div(probe_vector_norms) # side_length, num_random_probes
+    
     if jacobi_vector is not None:
         preconditioning_closure = generate_jacobi_closure(jacobi_vector)
         logdet_correction = jacobi_vector.log().sum()
@@ -38,6 +44,7 @@ def stochastic_LQ_logdet_grad(closure, grad_closure, probe_vectors, side_length,
         preconditioning_closure = None
         logdet_correction = 0
         conditioned_probes = probe_vectors_scaled
+
     solves, tmat = linear_cg(closure, probe_vectors_scaled, n_tridiag=num_random_probes, tolerance=tolerance,
                         eps=1e-10, stop_updating_after=1e-10, max_iter=max_cg_iter,
                         max_tridiag_iter=max_cg_iter-1, preconditioner=preconditioning_closure)
@@ -46,10 +53,11 @@ def stochastic_LQ_logdet_grad(closure, grad_closure, probe_vectors, side_length,
     slq = StochasticLQ(max_iter=-1, num_random_probes=num_random_probes)
     pos_eigvals, pos_eigvecs = lanczos_tridiag_to_diag(tmat)
     (logdet_term,) = slq.evaluate((side_length, side_length), pos_eigvals, pos_eigvecs, [lambda x: x.log()])
-    # estimate gradient
-    grad = (grad_closure(solves) * conditioned_probes * probe_vector_norms.pow(2)).sum(dim=0).mean(dim=0) # we re-introduce the norms to make sure probes are K=I
+    
+    conditioned_scaled_probes = conditioned_probes * probe_vector_norms.pow(2)  # we re-introduce the norms to make sure probes are K=I
+    return solves, conditioned_scaled_probes, logdet_term + logdet_correction 
 
-    return grad, logdet_term + logdet_correction, solves
+
 
 def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=True, jacobi_vector=None):
     
@@ -59,11 +67,26 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     main_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grad_tuple=None, use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=True)
     probe_vectors = generate_probes(side_length=410, num_random_probes=vec_batch_size, device=bayesianized_model.store_device, jacobi_vector=jacobi_vector) 
     gp_priors_grad_dict, normal_priors_grad_dict, _ = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs)
+
+    solves, cs_probes, logdet  = stochastic_LQ_logdet_and_solves(main_closure, probe_vectors, max_cg_iter=30, tolerance=1, jacobi_vector=jacobi_vector)
     
+    solves_reshape = solves.T.view(vec_batch_size, 1, 10, 41)
+    solves_AJ_reshape = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, solves_reshape, bayesianized_model)
+    solves_AJ = solves_AJ_reshape.view(vec_batch_size, 410)
+
+    cs_probes_reshape = solves.T.view(vec_batch_size, 1, 10, 41)
+    cs_probes_AJ_reshape = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, cs_probes_reshape, bayesianized_model)
+    cs_probes_AJ = cs_probes_AJ_reshape.view(vec_batch_size, 410)
+
+
     for gp_prior in bayesianized_model.gp_priors:
         # building AJ(delta Sigma_theta/delta_hyperparams)J^T A^T
-        grad_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grad_tuple=(gp_priors_grad_dict['lengthscales'][gp_prior], normal_priors_grad_dict['all_zero']), use_fwAD_for_jvp=True, add_noise_model_variance_obs=False)
-        grad, _, _  = stochastic_LQ_logdet_grad(main_closure, grad_closure, probe_vectors, side_length=410, vec_batch_size=vec_batch_size, max_cg_iter=10, tolerance=1e-1, jacobi_vector=jacobi_vector)
+        
+        solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, gp_priors_grad_dict['lengthscales'][gp_prior], normal_priors_grad_dict['all_zero'], solves_AJ)
+        assert solves_AJSig.shape[0] == vec_batch_size
+        assert solves_AJSig.shape[1] == 410
+
+        grad = (solves_AJSig * cs_probes_AJ).sum(dim=1).mean(dim=0) 
         grads[gp_prior.cov.log_lengthscale] = grad
     
     return grads
