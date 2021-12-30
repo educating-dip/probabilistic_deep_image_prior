@@ -30,7 +30,7 @@ def direct_model_normal_centering_prior(y, projector, marginal_x_std=0.3):
     full_dim = projector.shape[1]
     side_size = int(full_dim ** 0.5)
     trainset_mean = 0.1307
-    noise_std = 0.1
+    noise_std = 0.1 * jnp.abs(y).mean()
     
     x = numpyro.sample("x", ImproperUniform(constraints.interval(0, 1), (), event_shape=(full_dim,)))
     numpyro.sample("x_prior", dist.Normal(jnp.zeros((full_dim)) + trainset_mean, marginal_x_std*jnp.ones((full_dim))), obs=x)
@@ -48,7 +48,7 @@ def direct_model_predcp_tv_prior(y, projector, lambd=1e4, marginal_x_std=0.3):
     full_dim = projector.shape[1]
     trainset_mean = 0.1307
     side_size = int(full_dim ** 0.5)
-    noise_std = 0.1
+    noise_std = 0.1 * jnp.abs(y).mean()
     
     sigma2 = marginal_x_std ** 2
 #     
@@ -75,7 +75,7 @@ def direct_model_tv_prior(y, projector, lambd=1e4):
     obs_dim = projector.shape[0]
     full_dim = projector.shape[1]
     side_size = int(full_dim ** 0.5)
-    noise_std = 0.1
+    noise_std = 0.1 * jnp.abs(y).mean()
 
     x = numpyro.sample("x", ImproperUniform(constraints.interval(0, 1), (), event_shape=(full_dim,)))
     

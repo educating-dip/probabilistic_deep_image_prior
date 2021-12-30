@@ -60,6 +60,7 @@ def TV(x):
     v_tv = jnp.abs(jnp.diff(x, axis=-2, n=1)).sum()
     return h_tv + v_tv
 
+
 def generate_dist_mtx(side):
     coords = np.stack([np.repeat(np.arange(side), side), np.tile(np.arange(side), side)], axis=1)
     coords_exp1 = coords[:,None,:]

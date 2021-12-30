@@ -85,7 +85,7 @@ if parameter_vector is not None:
         
         image_np = example_image.numpy().flatten()
         observation = op_mat @ image_np
-        observation += np.random.randn(*observation.shape) * noise_std
+        observation += np.random.randn(*observation.shape) * noise_std * jnp.abs(observation).mean()
         
         for n_param, param in enumerate(parameter_vector):
             model = partial(sampling_model, observation, op_mat, param)
@@ -121,7 +121,7 @@ for n_im in range(N_images_val):
         
     image_np = example_image.numpy().flatten()
     observation = op_mat @ image_np
-    observation += np.random.randn(*observation.shape) * noise_std
+    observation += np.random.randn(*observation.shape) * noise_std *  jnp.abs(observation).mean()
     
     model = partial(sampling_model, observation, op_mat, best_param)
     samples = draw_samples(model, warmup, n_samples, thinning, num_chains)
@@ -158,7 +158,7 @@ for n_im in range(N_images_val):
     (example_image, _) = next(test_dset)
     image_np = example_image.numpy().flatten()
     observation = op_mat @ image_np
-    observation += np.random.randn(*observation.shape) * noise_std
+    observation += np.random.randn(*observation.shape) * noise_std * jnp.abs(observation).mean()
     
     # draw samples
     model = partial(sampling_model, observation, op_mat, best_param)
