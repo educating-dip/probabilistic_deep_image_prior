@@ -82,7 +82,7 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     for gp_prior in bayesianized_model.gp_priors:
         for param_name in ['lengthscales', 'variances']: 
             solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, gp_priors_grad_dict[param_name][gp_prior], normal_priors_grad_dict['all_zero'], solves_AJ)
-            grad = (solves_AJSig * cs_probes_AJ).sum(dim=1).mean(dim=0)
+            grad = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
             if param_name == 'lengthscales': 
                 grads[gp_prior.cov.log_lengthscale] = grad
             elif param_name == 'variances': 
@@ -91,11 +91,11 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     for normal_prior in bayesianized_model.normal_priors:
 
         solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, gp_priors_grad_dict['all_zero'], normal_priors_grad_dict['variances'][normal_prior], solves_AJ)
-        grad = (solves_AJSig * cs_probes_AJ).sum(dim=1).mean(dim=0)
+        grad = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
         grads[normal_prior.log_variance] = grad
 
     solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, log_noise_variance_obs_grad_dict['gp_prior'], log_noise_variance_obs_grad_dict['normal_prior'], solves_AJ)    
-    grads[log_noise_model_variance_obs] = (solves_AJSig * cs_probes_AJ).sum(dim=1).mean(dim=0)
+    grads[log_noise_model_variance_obs] = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
     
     return grads
 
