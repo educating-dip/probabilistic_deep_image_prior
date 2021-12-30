@@ -1,5 +1,4 @@
 from .utils_batch_jac import aggregate_flatten_weight_batch_grad, clear_grads
-import torch 
 
 def vec_jac_mul_batch(hooked_model, filtbackproj, v, bayesianized_model):
     
@@ -21,7 +20,7 @@ def vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, v, bayesianized
     batch_size = v.shape[0]
     filtbackproj = filtbackproj.expand(batch_size, *filtbackproj.shape[1:]) 
     hooked_model.eval()
-    f = ray_trafos['ray_trafo_module'](hooked_model(filtbackproj)[0])
+    f = ray_trafos['ray_trafo_module'](hooked_model(filtbackproj)[0]) # Af 
     hooked_model.zero_grad()
     assert f.shape == v.shape
     f.backward(v) # (f * v).sum(dim=-1).sum(dim=0).backward()

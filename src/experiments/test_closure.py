@@ -16,7 +16,7 @@ from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
-        add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat,
+        add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat, get_diag_prior_cov_obs_mat,
         get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, compute_approx_log_det_grad)
 
 def check_hyperparams_grad(block_priors, Kyy):
@@ -30,7 +30,7 @@ def check_hyperparams_grad(block_priors, Kyy):
         grads[hyper_params] = hyper_params.grad
     return grads
 
-def compare_dicts(dict1, dict2): 
+def compare_hyperparams_grads(dict1, dict2): 
     for key1 in dict1: 
         if key1 in dict2:
             atol = 1e-03
@@ -113,22 +113,17 @@ def coordinator(cfg : DictConfig) -> None:
                     cfg.mrglik.priors.lengthscale_init,
                     cfg.mrglik.priors.variance_init,
                     lin_weights=None)
-            v_image_assembled_jac = ray_trafos['ray_trafo_module_adj'](v).view(v.shape[0], -1)
+            v_image_assembled_jac = ray_trafos['ray_trafo_module_adj'](v).view(v.shape[0], -1)  # v * A 
 
-            Kxx = block_priors.matrix_prior_cov_mul(jac) @ jac.transpose(1, 0)
-            v_image_assembled_jac = v_image_assembled_jac @ Kxx
-            
-            # alternative implementation:
-            # v_params_assembled_jac = v_image_assembled_jac @ jac
-            # print('v_params_assembled_jac', v_params_assembled_jac[:, :10])
-            # v_params_assembled_jac = block_priors.matrix_prior_cov_mul(v_params_assembled_jac)
-            # # v_params_assembled_jac = vec_weight_prior_cov_mul(bayesianized_model, v_params_assembled_jac)
-            # v_image_assembled_jac = v_params_assembled_jac @ jac.T
-
-            v_obs_assembled_jac = ray_trafos['ray_trafo_module'](v_image_assembled_jac.view(v.shape[0], *example_image.shape[1:]))
+            Kxx = block_priors.matrix_prior_cov_mul(jac) @ jac.transpose(1, 0) # J * Sigma_theta * J.T
+            v_image_assembled_jac = v_image_assembled_jac @ Kxx # v * A * J * Sigma_theta * J.T
+            v_obs_assembled_jac = ray_trafos['ray_trafo_module'](v_image_assembled_jac.view(v.shape[0], *example_image.shape[1:])) # v * A * J * Sigma_theta * J.T *A.T
             v_obs_assembled_jac = v_obs_assembled_jac + v * torch.exp(log_noise_model_variance_obs)
-            A = torch.from_numpy(ray_trafos['ray_trafo_mat']).cuda().view(410, 784)
-            Kyy = A @ Kxx @ A.T + torch.exp(log_noise_model_variance_obs) * torch.eye(A.shape[0], device=A.device) # TODO: ask Johannes 
+
+            # constructing Kyy
+            Kyy = ray_trafos['ray_trafo_module'](Kxx.view(example_image.numel(), *example_image.shape[1:]))
+            Kyy = Kyy.view(example_image.numel(), -1).T.view(-1, *example_image.shape[1:])
+            Kyy = ray_trafos['ray_trafo_module'](Kyy).view(-1, np.prod(v.shape[2:])) + torch.exp(log_noise_model_variance_obs) * torch.eye(np.prod(v.shape[2:]), device=reconstructor.device)
 
         add_batch_grad_hooks(reconstructor.model, modules)
 
@@ -172,19 +167,16 @@ def coordinator(cfg : DictConfig) -> None:
                 print('did not assemble jacobian matrix')
  
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
-
-    approx_hyperparams_grads = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True, jacobi_vector=cov_obs_mat.diag())
+    diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True)
+    approx_hyperparams_grads = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True, jacobi_vector=diag_cov_obs_mat)
     print(approx_hyperparams_grads)
-
-    # check this with Johannes
-    # diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size)
 
     # testing exact Hessian posterior logdet grads w.r.t. hyperparams
     refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
     start = time.time()
     exact_hyperparams_grads = compute_exact_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
     print("time \s:", time.time() - start)
-    compare_dicts(refs_hyperparams_grads, exact_hyperparams_grads)
+    compare_hyperparams_grads(refs_hyperparams_grads, exact_hyperparams_grads)
     print(exact_hyperparams_grads)
 
 if __name__ == '__main__':

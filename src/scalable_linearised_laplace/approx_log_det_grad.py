@@ -17,13 +17,13 @@ def generate_probes(side_length, num_random_probes, dtype=None, device=None, jac
 
 def generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, 
         be_model, be_modules, log_noise_model_variance_obs, vec_batch_size, 
-        masked_cov_grad_tuple=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True):
+        masked_cov_grads=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True):
 
     def closure(v):
         # takes input (410 x batchsize)
         v = v.T.view(vec_batch_size, 1, 10, 41)
         out = prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, 
-            be_model, be_modules, v, log_noise_model_variance_obs, masked_cov_grad_tuple=masked_cov_grad_tuple,
+            be_model, be_modules, v, log_noise_model_variance_obs, masked_cov_grads=masked_cov_grads,
             use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=add_noise_model_variance_obs)
         out = out.view(vec_batch_size, 410)
         return out.T
@@ -64,7 +64,7 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     grads = {}
 
     # v * (AJSigma_thetaJ.TA.T + sigma^2_y)
-    main_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grad_tuple=None, use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=True)
+    main_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grads=None, use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=True)
     probe_vectors = generate_probes(side_length=410, num_random_probes=vec_batch_size, device=bayesianized_model.store_device, jacobi_vector=jacobi_vector) 
     gp_priors_grad_dict, normal_priors_grad_dict, _ = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs)
 
