@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from deep_image_prior import diag_gaussian_log_prob, tv_loss
 from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 from linearized_weights import get_weight_block_vec
-from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul
+from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
 
 def marginal_lik_log_det_update(block_priors, grads, step_size, return_loss=False):
     parameters = []
@@ -64,6 +64,9 @@ def optim_marginal_lik_low_rank(
                           {'params': block_priors.normal_log_variances, 'lr': cfg.mrglik.optim.lr},
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
+
+    if jacobi_vector is None:
+        jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True).detach()
 
     with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt') as pbar:
         for i in pbar:
