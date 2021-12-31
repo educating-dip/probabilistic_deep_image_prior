@@ -42,6 +42,9 @@ conda install pytorch torchvision cudatoolkit=$cudatoolkit_version -c pytorch-ni
 # install other conda packages
 conda install tensorboard tensorboardx scikit-image imageio opt_einsum tqdm
 
+# install gpytorch package
+conda install gpytorch -c gpytorch
+
 # install astra package (should install version >= 2.0.0)
 conda install astra-toolbox -c astra-toolbox
 

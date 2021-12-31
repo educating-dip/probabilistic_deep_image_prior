@@ -4,6 +4,8 @@ import numpy as np
 from itertools import islice
 import hydra
 from omegaconf import DictConfig
+from tabulate import tabulate
+from copy import deepcopy
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
@@ -37,6 +39,21 @@ def compare_hyperparams_grads(dict1, dict2):
             if not torch.allclose(dict1[key1], dict2[key1], rtol=1e-05, atol=atol):
                 print('test tol {} failed: hyperparam ref:{:.4f}, est: {:.4f}, abs. diff. {:.4f}'.format(
                     atol, dict1[key1].item(), dict2[key1].item(), np.abs(dict1[key1].item()-dict2[key1].item())))
+
+def check_if_key_missing(key, dict):
+    if key not in dict:
+        dict[key] = '--'
+        return dict[key]
+    else:
+        return round(dict[key].item(), 8)
+
+def tabulate_comparison_hyperparams_grads(*args):
+    merge_list = []
+    for dict in args[1:]:
+        for key in dict: 
+            merge_list.append([check_if_key_missing(key, dict) for dict in args])
+        break
+    print(tabulate(merge_list, headers=['autograd refs grads', 'exact grads', 'approx grads']))
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -167,17 +184,19 @@ def coordinator(cfg : DictConfig) -> None:
                 print('did not assemble jacobian matrix')
  
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
-    diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True)
-    approx_hyperparams_grads = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True, jacobi_vector=diag_cov_obs_mat)
-    print(approx_hyperparams_grads)
+    if cfg.name in ['mnist', 'kmnist']:
 
-    # testing exact Hessian posterior logdet grads w.r.t. hyperparams
-    refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
-    start = time.time()
-    exact_hyperparams_grads = compute_exact_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
-    print("time \s:", time.time() - start)
-    compare_hyperparams_grads(refs_hyperparams_grads, exact_hyperparams_grads)
-    print(exact_hyperparams_grads)
+        diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True)
+        approx_hyperparams_grads = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, side_length=observation.shape[1:],  use_fwAD_for_jvp=True, jacobi_vector=diag_cov_obs_mat)
+
+        # testing exact Hessian posterior logdet grads w.r.t. hyperparams
+        refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
+        start = time.time()
+        exact_hyperparams_grads = compute_exact_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
+        print("time \s:", time.time() - start)
+
+        compare_hyperparams_grads(refs_hyperparams_grads, exact_hyperparams_grads)
+        tabulate_comparison_hyperparams_grads(refs_hyperparams_grads, exact_hyperparams_grads, approx_hyperparams_grads)
 
 if __name__ == '__main__':
     coordinator()
