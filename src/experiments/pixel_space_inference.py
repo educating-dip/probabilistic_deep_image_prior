@@ -20,6 +20,9 @@ from direct_inference.objectives import *
 
 import pickle
 
+import numpyro 
+numpyro.set_host_device_count(5)
+
 # module load cuda/11.4
 # module load gcc/8
 
@@ -63,7 +66,7 @@ optimisation_stop_length = 1000
 
 model_mode = 'Gaussian' #'Gaussian'
 
-savedir = f'../save/{model_mode}_HMC/'
+savedir = f'./save/{model_mode}_HMC/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
