@@ -108,7 +108,6 @@ def coordinator(cfg : DictConfig) -> None:
             cfg,
             observation,
             (recon, proj_recon),
-            block_priors, 
             ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
             comment = '_recon_num_' + str(i)
             )

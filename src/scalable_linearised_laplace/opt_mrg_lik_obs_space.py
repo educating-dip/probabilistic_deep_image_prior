@@ -12,13 +12,11 @@ from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 from linearized_weights import get_weight_block_vec
 from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
 
-def marginal_lik_log_det_update(block_priors, grads, step_size, return_loss=False):
-    parameters = []
-    for gp_prior in block_priors.gp_priors:
-        parameters.append(gp_prior.cov.log_lengthscale)
-        parameters.append(gp_prior.cov.log_variance)
-    for normal_prior in block_priors.normal_priors:
-        parameters.append(normal_prior.log_variance)
+def marginal_lik_log_det_update(bayesianized_model, grads, step_size, return_loss=False):
+    parameters = (
+            bayesianized_model.gp_log_lengthscales +
+            bayesianized_model.gp_log_variances +
+            bayesianized_model.normal_log_variances)
 
     for param in parameters:
         if param.grad is None:
@@ -33,7 +31,6 @@ def optim_marginal_lik_low_rank(
     cfg,
     observation,
     recon,
-    block_priors,  # TODO move to bayesianized_model
     ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
     jacobi_vector=None,
     comment=''
@@ -59,9 +56,9 @@ def optim_marginal_lik_low_rank(
         torch.zeros(1, device=device),
     )
     optimizer = \
-        torch.optim.Adam([{'params': block_priors.gp_log_lengthscales, 'lr': cfg.mrglik.optim.lr},
-                          {'params': block_priors.gp_log_variances, 'lr': cfg.mrglik.optim.lr},
-                          {'params': block_priors.normal_log_variances, 'lr': cfg.mrglik.optim.lr},
+        torch.optim.Adam([{'params': bayesianized_model.gp_log_lengthscales, 'lr': cfg.mrglik.optim.lr},
+                          {'params': bayesianized_model.gp_log_variances, 'lr': cfg.mrglik.optim.lr},
+                          {'params': bayesianized_model.normal_log_variances, 'lr': cfg.mrglik.optim.lr},
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
@@ -84,7 +81,7 @@ def optim_marginal_lik_low_rank(
                     log_noise_model_variance_obs.detach(),
                     cfg.mrglik.impl.vec_batch_size, side_length=observation_shape,
                     use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, jacobi_vector=jacobi_vector)
-            marginal_lik_log_det_update(block_priors, grads, step_size=cfg.mrglik.optim.lr)
+            marginal_lik_log_det_update(bayesianized_model, grads, step_size=cfg.mrglik.optim.lr)
 
             obs_log_density = (torch.sum(observation - proj_recon) ** 2) / torch.exp(log_noise_model_variance_obs)  # 0.5 * sigma_y^-2 ||y_delta - A f(theta^*)||_2^2
 
@@ -95,13 +92,13 @@ def optim_marginal_lik_low_rank(
             loss.backward()
             optimizer.step()
 
-            for k, gp_log_lengthscale in enumerate(block_priors.gp_log_lengthscales):
+            for k, gp_log_lengthscale in enumerate(bayesianized_model.gp_log_lengthscales):
                 writer.add_scalar('gp_lengthscale_{}'.format(k),
                                 torch.exp(gp_log_lengthscale).item(), i)
-            for k, gp_log_variance in enumerate(block_priors.gp_log_variances):
+            for k, gp_log_variance in enumerate(bayesianized_model.gp_log_variances):
                 writer.add_scalar('gp_variance_{}'.format(k),
                                 torch.exp(gp_log_variance).item(), i)
-            for k, normal_log_variance in enumerate(block_priors.normal_log_variances):
+            for k, normal_log_variance in enumerate(bayesianized_model.normal_log_variances):
                 writer.add_scalar('normal_variance_{}'.format(k),
                                 torch.exp(normal_log_variance).item(), i)
 

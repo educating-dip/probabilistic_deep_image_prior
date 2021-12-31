@@ -141,6 +141,21 @@ class BayesianizeModel(nn.Module):
         return sum(self.ref_num_filters_per_modules_under_gp_priors) * 3**2 + \
                 sum(self.ref_num_params_per_modules_under_normal_priors)
 
+    @property
+    def gp_log_lengthscales(self):
+        return [gp_prior.cov.log_lengthscale for gp_prior in self.gp_priors
+                if gp_prior.cov.log_lengthscale.requires_grad]
+
+    @property
+    def gp_log_variances(self):
+        return [gp_prior.cov.log_variance for gp_prior in self.gp_priors
+                if gp_prior.cov.log_variance.requires_grad]
+
+    @property
+    def normal_log_variances(self):
+        return [normal_prior.log_variance for normal_prior in self.normal_priors
+                if normal_prior.log_variance.requires_grad]
+
     def get_all_modules_under_prior(self):
         all_modules = []
         for modules in self.ref_modules_under_gp_priors:
