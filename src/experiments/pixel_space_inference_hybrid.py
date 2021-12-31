@@ -10,6 +10,11 @@ if nb_dir not in sys.path:
 from jax.lib import xla_bridge
 print(xla_bridge.get_backend().platform)
 
+import numpyro 
+import jax
+print(jax.local_device_count())
+numpyro.set_host_device_count(5)
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -20,8 +25,6 @@ from direct_inference.objectives import *
 import pickle
 from sklearn.neighbors import KernelDensity
 
-import numpyro 
-numpyro.set_host_device_count(5)
 
 # module load cuda/11.4
 # module load gcc/8

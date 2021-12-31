@@ -2,6 +2,8 @@ import numpy as np
 import jax.numpy as jnp
 import PIL
 from PIL import Image, ImageOps
+import jax
+from jax import jit
 
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
@@ -55,20 +57,19 @@ def psnr(x, y, smax=1):
     psnr = 10 * np.log10( (smax ** 2) / mse )
     return psnr
 
+@jit
 def TV(x):
     h_tv = jnp.abs(jnp.diff(x, axis=-1, n=1)).sum()
     v_tv = jnp.abs(jnp.diff(x, axis=-2, n=1)).sum()
     return h_tv + v_tv
 
-
 def generate_dist_mtx(side):
-    coords = np.stack([np.repeat(np.arange(side), side), np.tile(np.arange(side), side)], axis=1)
+    coords = jnp.stack([jnp.repeat(jnp.arange(side), side), jnp.tile(jnp.arange(side), side)], axis=1)
     coords_exp1 = coords[:,None,:]
     coords_exp0 = coords[None,:,:]
     dist_mtx = ((coords_exp1 - coords_exp0) ** 2).sum(axis=-1) ** 0.5
     return dist_mtx
-
-        
+      
 def RadialBasisFuncCov(side, marg_var, AR_p):
     eps = 1e-5        
     AR_p = jnp.clip(AR_p, a_min=eps, a_max=1-eps)
@@ -77,6 +78,20 @@ def RadialBasisFuncCov(side, marg_var, AR_p):
     cov_mat = marg_var * (jnp.exp(dist_mtx * log_ar_p) + eps * jnp.eye(side ** 2))
     return  cov_mat
 
+
+def RBF_cholesky(d, sig2, AR_p):
+
+    col0 = AR_p ** jnp.arange(d)
+    offd = jnp.sqrt(1 - AR_p**2)
+    offd_vec = offd * (AR_p ** jnp.arange(0, d))
+    L = jnp.eye(d)
+    L = jax.ops.index_update(L, jax.ops.index[:,0], col0)
+    for i in np.arange(1,d):
+        L = jax.ops.index_update(L, jax.ops.index[i:,i], offd_vec[:-i])
+        
+    return L * (sig2 ** 0.5)
+
+@jit
 def expected_TV(sidelength, marg_var, AR_p):
     return (4 * (sidelength - 1) * sidelength / np.sqrt(np.pi)) * ( (marg_var - marg_var*AR_p ) ** 0.5).sum() 
 
