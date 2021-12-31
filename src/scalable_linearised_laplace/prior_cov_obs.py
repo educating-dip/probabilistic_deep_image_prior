@@ -21,25 +21,25 @@ def vec_jac_mul_single(model, modules, filtbackproj, v):
     v_jac = agregate_flatten_weight_grad(modules).detach()
     return v_jac
 
-# multiply v with Kyy and add sigma^2_y * v
+# multiply v with Kyy and add σ^2_y * v
 def prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, v, log_noise_model_variance_obs, masked_cov_grads=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True):
     
     if len(v.shape) == 5:
         v = torch.squeeze(v, dim=1)
     assert len(v.shape) == 4
 
-    # computing v_params = vAJ
+    # computing v_θ = v * A * J
     v_params = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, v, bayesianized_model)
 
-    # computing v_params = v_params * Sigma_theta
+    # computing v_θ = v_θ * Σ_θ
     if masked_cov_grads is None: 
         v_params = vec_weight_prior_cov_mul(bayesianized_model, v_params)
-    # computing v_params = v_params * delta_sigma_theta/delta_hyperparams
+    # computing v_θ = v_θ * (δΣ_θ / δ_hyperparams)
     else:
         masked_cov_grad_gp_priors, masked_cov_grad_normal_priors = masked_cov_grads
         v_params = vec_weight_prior_cov_mul_base(bayesianized_model, masked_cov_grad_gp_priors, masked_cov_grad_normal_priors, v_params)
 
-    # computing v_obs = v_params * J^T A^T 
+    # computing v_obs = v_θ * J.T * A.T 
     if use_fwAD_for_jvp:
         v_image = fwAD_JvP_batch_ensemble(filtbackproj, be_model, v_params, be_modules)
     else:
@@ -47,14 +47,14 @@ def prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_m
     v_image = torch.squeeze(v_image, dim=1)  # remove trivial sample-batch dimension (be_model uses B_ensemble x B_sample x C x H x W)
     v_obs = ray_trafos['ray_trafo_module'](v_image)
 
-    # adding sigma^2_y * v
+    # adding σ^2_y * v
     if add_noise_model_variance_obs: 
         v_obs = v_obs + v * torch.exp(log_noise_model_variance_obs)
     return v_obs
 
 # multiply v with diag Kyy and + σ^2_y * v
 def prior_diag_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_model, v, log_noise_model_variance_obs, replace_by_identity=False):
-    # diag (K_yy) = e_i A J Σ_θ J.T A.T e_i.T + σ^2_y
+    # diag (Kyy) = e_i A J Σ_θ J.T A.T e_i.T + σ^2_y
 
     if len(v.shape) == 5:
         v = torch.squeeze(v, dim=1)
