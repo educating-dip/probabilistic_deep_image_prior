@@ -79,13 +79,13 @@ def gen_direct_predcp_TV_MLE_objective(y, lambd, marginal_x_std, projector):
         AR_p = params['AR_p'] # preconstrained
         
         sigma2 = marginal_x_std ** 2
-        tv = expected_TV(side_size, sigma2, AR_p).sum()
-        
+        tv, grad = value_and_grad(expected_TV, argnums=2)(side_size, sigma2, AR_p)
+
         Cov = RadialBasisFuncCov(side_size, sigma2, AR_p)
         normal_LL = multivariate_normal.logpdf(x, mean=jnp.ones(x.shape)*x_mean, cov=Cov)
         
         y_pred = projector @ x
-        return gaussian_ll(y, y_pred, jnp.log(noise_std)).sum(axis=0) - lambd * tv / N_TV_entries(side_size) + normal_LL
+        return gaussian_ll(y, y_pred, jnp.log(noise_std)).sum(axis=0) - lambd * tv / N_TV_entries(side_size) + jnp.log(jnp.abs(grad.sum())) + normal_LL
     
     return jit(direct_TV_MLE_objective) # 
 

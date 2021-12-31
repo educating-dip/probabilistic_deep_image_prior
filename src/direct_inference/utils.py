@@ -78,7 +78,7 @@ def RadialBasisFuncCov(side, marg_var, AR_p):
     return  cov_mat
 
 def expected_TV(sidelength, marg_var, AR_p):
-    return (4 * (sidelength - 1) * sidelength / np.sqrt(np.pi)) * ( (marg_var - marg_var*AR_p ) ** 0.5) 
+    return (4 * (sidelength - 1) * sidelength / np.sqrt(np.pi)) * ( (marg_var - marg_var*AR_p ) ** 0.5).sum() 
 
 
 def N_TV_entries(side):
