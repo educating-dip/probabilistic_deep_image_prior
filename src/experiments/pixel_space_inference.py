@@ -7,6 +7,9 @@ if nb_dir not in sys.path:
     sys.path.append(nb_dir)
     print(nb_dir)
 
+from jax.lib import xla_bridge
+print(xla_bridge.get_backend().platform)
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -26,7 +29,7 @@ noise_std = 0.1
 op_mat = gen_op_mat(img_side, num_angles)
 
 
-kmnist_path = '/scratch4/ja666/dip_bayesian_ext/kmnist'
+kmnist_path = './data/kmnist'
 
 train_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=True))
 test_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=False))
@@ -54,7 +57,7 @@ optimisation_stop_length = 1000
 
 # %% logging structures
 
-savedir = '../save/TV_HMC/'
+savedir = './save/TV_HMC/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
