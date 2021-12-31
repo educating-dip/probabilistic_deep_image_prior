@@ -12,17 +12,19 @@ from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 from linearized_weights import get_weight_block_vec
 from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
 
-def marginal_lik_log_det_update(bayesianized_model, grads, step_size, return_loss=False):
+def set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads, return_loss=False):
     parameters = (
             bayesianized_model.gp_log_lengthscales +
             bayesianized_model.gp_log_variances +
-            bayesianized_model.normal_log_variances)
+            bayesianized_model.normal_log_variances + 
+            [log_noise_model_variance_obs]
+            )
 
     for param in parameters:
         if param.grad is None:
-            param.grad = -(step_size * 0.5) * grads[param]
+            param.grad = grads[param]
         else:
-            param.grad -= (step_size * 0.5) * grads[param]
+            param.grad += grads[param]
 
     if return_loss:
         raise NotImplementedError
@@ -33,6 +35,7 @@ def optim_marginal_lik_low_rank(
     recon,
     ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
     jacobi_vector=None,
+    linearized_weights=None, 
     comment=''
     ):
 
@@ -50,7 +53,10 @@ def optim_marginal_lik_low_rank(
     observation_shape = observation.shape[1:]
     observation = observation.to(device).flatten()
 
-    weight_vec = get_weight_block_vec(bayesianized_model.get_all_modules_under_prior())[None]
+    if linearized_weights is None: 
+        weight_vec = get_weight_block_vec(bayesianized_model.get_all_modules_under_prior())[None]
+    else:
+        weight_vec = linearized_weights
 
     log_noise_model_variance_obs = torch.nn.Parameter(
         torch.zeros(1, device=device),
@@ -75,19 +81,18 @@ def optim_marginal_lik_low_rank(
                 predcp_loss = torch.zeros(1)
 
             # update grads for post_hess_log_det
-            grads = compute_approx_log_det_grad(
+            grads, log_det_term = compute_approx_log_det_grad(
                     ray_trafos, filtbackproj,
                     bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
-                    log_noise_model_variance_obs.detach(),
+                    log_noise_model_variance_obs,
                     cfg.mrglik.impl.vec_batch_size, side_length=observation_shape,
                     use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, jacobi_vector=jacobi_vector)
-            marginal_lik_log_det_update(bayesianized_model, grads, step_size=cfg.mrglik.optim.lr)
-
-            obs_log_density = (torch.sum(observation - proj_recon) ** 2) / torch.exp(log_noise_model_variance_obs)  # 0.5 * sigma_y^-2 ||y_delta - A f(theta^*)||_2^2
-
-            weight_prior_norm = (vec_weight_prior_cov_mul(bayesianized_model, weight_vec, return_inverse=True) @ weight_vec.T).squeeze()
             
-            loss = -0.5 * (obs_log_density + weight_prior_norm)
+            set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads)
+
+            obs_error_norm = (torch.sum(observation - proj_recon) ** 2) * torch.exp(-log_noise_model_variance_obs)  # σ_y^-2 ||y_delta - A f(theta^*)||_2^2
+            weight_prior_norm = (vec_weight_prior_cov_mul(bayesianized_model, weight_vec, return_inverse=True) @ weight_vec.T).squeeze()
+            loss = 0.5 * (obs_error_norm + weight_prior_norm)
 
             loss.backward()
             optimizer.step()
@@ -102,10 +107,11 @@ def optim_marginal_lik_low_rank(
                 writer.add_scalar('normal_variance_{}'.format(k),
                                 torch.exp(normal_log_variance).item(), i)
 
-            writer.add_scalar('negative_MAP_MLL', loss.item() + predcp_loss.item(), i)
-            writer.add_scalar('negative_MLL', loss.item(), i)
-            writer.add_scalar('obs_log_density', obs_log_density.item(), i)
+            writer.add_scalar('negative_MAP_MLL', loss.item() + predcp_loss.item() + 0.5 * log_det_term.item(), i)
+            writer.add_scalar('negative_MLL', loss.item() + 0.5 * log_det_term.item(), i)
+            writer.add_scalar('obs_error_norm', obs_error_norm.item(), i)
             writer.add_scalar('weight_prior_norm', weight_prior_norm.item(), i)
+            writer.add_scalar('log_det_term', log_det_term.item(), i)
             writer.add_scalar('predcp', -predcp_loss.item(), i)
             writer.add_scalar('noise_model_variance_obs', torch.exp(log_noise_model_variance_obs).item(), i)
 

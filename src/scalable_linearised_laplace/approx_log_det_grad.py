@@ -65,11 +65,12 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     grads = {}
 
     # v * (A * J * Σ_θ * J.T * A.T + σ^2_y)
-    main_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, side_length=side_length, masked_cov_grads=None, use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=True)
+    # we need to detach log_noise_model_variance_obs
+    main_closure = generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs.detach(), vec_batch_size, side_length=side_length, masked_cov_grads=None, use_fwAD_for_jvp=use_fwAD_for_jvp, add_noise_model_variance_obs=True)
     probe_vectors = generate_probes(side_length=np.prod(side_length), num_random_probes=vec_batch_size, device=bayesianized_model.store_device, jacobi_vector=jacobi_vector) 
-    gp_priors_grad_dict, normal_priors_grad_dict, log_noise_variance_obs_grad_dict = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs)
+    gp_priors_grad_dict, normal_priors_grad_dict, log_noise_variance_obs_grad_dict = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs.detach())
 
-    solves, cs_probes, _  = stochastic_LQ_logdet_and_solves(main_closure, probe_vectors, max_cg_iter=50, tolerance=1, jacobi_vector=jacobi_vector)
+    solves, cs_probes, log_det_term  = stochastic_LQ_logdet_and_solves(main_closure, probe_vectors, max_cg_iter=50, tolerance=1, jacobi_vector=jacobi_vector)
 
     solves_reshape = solves.T.view(vec_batch_size, *side_length)
     solves_AJ_reshape = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, solves_reshape, bayesianized_model)
@@ -84,20 +85,20 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
             solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, gp_priors_grad_dict[param_name][gp_prior], normal_priors_grad_dict['all_zero'], solves_AJ)
             grad = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
             if param_name == 'lengthscales': 
-                grads[gp_prior.cov.log_lengthscale] = grad
+                grads[gp_prior.cov.log_lengthscale] = 0.5 * grad # added 0.5 minimize
             elif param_name == 'variances': 
-                grads[gp_prior.cov.log_variance] = grad
+                grads[gp_prior.cov.log_variance] = 0.5 * grad
     
     for normal_prior in bayesianized_model.normal_priors:
 
         solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, gp_priors_grad_dict['all_zero'], normal_priors_grad_dict['variances'][normal_prior], solves_AJ)
         grad = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
-        grads[normal_prior.log_variance] = grad
+        grads[normal_prior.log_variance] = 0.5 * grad
 
     solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, log_noise_variance_obs_grad_dict['gp_prior'], log_noise_variance_obs_grad_dict['normal_prior'], solves_AJ)    
-    grads[log_noise_model_variance_obs] = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
+    grads[log_noise_model_variance_obs] = 0.5 * (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
     
-    return grads
+    return grads, log_det_term
 
 def generate_jacobi_closure(jacobi_vec, eps=1e-3):
     assert len(jacobi_vec.shape) == 1

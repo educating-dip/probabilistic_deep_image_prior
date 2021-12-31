@@ -96,20 +96,20 @@ def compute_exact_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, hoo
         # building A * J * (δΣ_θ / δ_hyperparams) * J.T * A.T
         AJGradsATJT_lengthscale = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, 
             log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=use_fwAD_for_jvp, masked_cov_grads=(gp_priors_grad_dict['lengthscales'][gp_prior], normal_priors_grad_dict['all_zero']), add_noise_model_variance_obs=False)
-        grads[gp_prior.cov.log_lengthscale] = torch.trace(cov_obs_mat_inv @ AJGradsATJT_lengthscale).detach()
+        grads[gp_prior.cov.log_lengthscale] = 0.5 * torch.trace(cov_obs_mat_inv @ AJGradsATJT_lengthscale).detach()
 
         AJGradsATJT_variances = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, 
             log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=use_fwAD_for_jvp, masked_cov_grads=(gp_priors_grad_dict['variances'][gp_prior], normal_priors_grad_dict['all_zero']), add_noise_model_variance_obs=False)
-        grads[gp_prior.cov.log_variance] = torch.trace(cov_obs_mat_inv @ AJGradsATJT_variances).detach()
+        grads[gp_prior.cov.log_variance] = 0.5 * torch.trace(cov_obs_mat_inv @ AJGradsATJT_variances).detach()
 
     for normal_prior in bayesianized_model.normal_priors:
         # building A * J * (δΣ_θ / δ_hyperparams) * J.T * A.T
         AJGradsATJT = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, 
             log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=use_fwAD_for_jvp, masked_cov_grads=(gp_priors_grad_dict['all_zero'], normal_priors_grad_dict['variances'][normal_prior]), add_noise_model_variance_obs=False)
-        grads[normal_prior.log_variance]= torch.trace(cov_obs_mat_inv @ AJGradsATJT).detach()
+        grads[normal_prior.log_variance] = 0.5 * torch.trace(cov_obs_mat_inv @ AJGradsATJT).detach()
 
     AJGradsATJT = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, 
             log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=use_fwAD_for_jvp, masked_cov_grads=(log_noise_variance_obs_grad_dict['gp_prior'], log_noise_variance_obs_grad_dict['normal_prior']), add_noise_model_variance_obs=False)
-    grads[log_noise_model_variance_obs]= torch.trace(cov_obs_mat_inv @ AJGradsATJT).detach()
+    grads[log_noise_model_variance_obs] = 0.5 * torch.trace(cov_obs_mat_inv @ AJGradsATJT).detach()
 
     return grads

@@ -96,15 +96,7 @@ def coordinator(cfg : DictConfig) -> None:
 
         proj_recon = ray_trafos['ray_trafo_module'](recon)
 
-        block_priors = BlocksGPpriors(
-            reconstructor.model,
-            bayesianized_model,
-            reconstructor.device,
-            cfg.mrglik.priors.lengthscale_init,
-            cfg.mrglik.priors.variance_init,
-            lin_weights=None)
-
-        noise_model_variance_obs_space_predcp = optim_marginal_lik_low_rank(
+        noise_model_variance_obs_space = optim_marginal_lik_low_rank(
             cfg,
             observation,
             (recon, proj_recon),
@@ -112,8 +104,8 @@ def coordinator(cfg : DictConfig) -> None:
             comment = '_recon_num_' + str(i)
             )
 
-        torch.save(block_priors.state_dict(), 
-            './block_priors_{}.pt'.format(i))
+        torch.save(bayesianized_model.state_dict(), 
+            './bayesianized_model_{}.pt'.format(i))
 
 if __name__ == '__main__':
     coordinator()
