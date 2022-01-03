@@ -10,6 +10,11 @@ if nb_dir not in sys.path:
 from jax.lib import xla_bridge
 print(xla_bridge.get_backend().platform)
 
+import numpyro 
+import jax
+print(jax.local_device_count())
+numpyro.set_host_device_count(5)
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -19,6 +24,7 @@ from direct_inference.objectives import *
 
 import pickle
 from sklearn.neighbors import KernelDensity
+
 
 # module load cuda/11.4
 # module load gcc/8
@@ -32,8 +38,8 @@ noise_std = 0.1
 
 op_mat = gen_op_mat(img_side, num_angles)
 
-
 kmnist_path = '/scratch4/ja666/dip_bayesian_ext/kmnist'
+# kmnist_path = './data/kmnist'
 
 train_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=True))
 test_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=False))
@@ -61,7 +67,7 @@ optimisation_stop_length = 1000
 
 # %% logging structures
 
-savedir = '../save/Hybrid_HMC/'
+savedir = './save/Hybrid_HMC/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
