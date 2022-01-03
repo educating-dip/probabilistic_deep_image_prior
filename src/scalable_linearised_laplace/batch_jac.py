@@ -4,7 +4,7 @@ def vec_jac_mul_batch(hooked_model, filtbackproj, v, bayesianized_model):
     
     batch_size = v.shape[0]
     assert v.shape[1] == len(filtbackproj.flatten())
-    filtbackproj = filtbackproj.expand(batch_size, *filtbackproj.shape[1:]) 
+    filtbackproj = filtbackproj.expand(batch_size, *filtbackproj.shape[1:])
     hooked_model.eval()
     f = hooked_model(filtbackproj)[0].view(batch_size, -1)
     hooked_model.zero_grad()

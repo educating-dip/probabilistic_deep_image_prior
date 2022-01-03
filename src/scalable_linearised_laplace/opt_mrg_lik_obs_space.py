@@ -3,14 +3,12 @@ import socket
 import datetime
 import torch
 import numpy as np
-from torch.linalg import cholesky
 import torch.autograd as autograd
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from deep_image_prior import diag_gaussian_log_prob, tv_loss
-from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 from linearized_weights import get_weight_block_vec
 from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
+from .mc_pred_cp_loss import set_gp_priors_grad_predcp
 
 def set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads, return_loss=False):
     parameters = (
@@ -76,7 +74,9 @@ def optim_marginal_lik_low_rank(
 
             optimizer.zero_grad()
             if cfg.mrglik.optim.include_predcp:
-                raise NotImplementedError
+                assert cfg.mrglik.optim.scl_fct_gamma is not None
+                tv_scaling_fct = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma
+                predcp_loss = set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, fwAD_be_model, fwAD_be_modules, cfg.mrglik.impl.vec_batch_size, tv_scaling_fct, use_fwAD_for_jvp=True)
             else: 
                 predcp_loss = torch.zeros(1)
 

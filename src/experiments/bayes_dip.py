@@ -14,8 +14,7 @@ from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel, BlocksGPpriors
 from linearized_weights import weights_linearization
 from scalable_linearised_laplace import (
-        add_batch_grad_hooks, get_diag_prior_cov_obs_mat,
-        get_unet_batch_ensemble, get_fwAD_model, optim_marginal_lik_low_rank)
+        add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model, optim_marginal_lik_low_rank)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -71,6 +70,7 @@ def coordinator(cfg : DictConfig) -> None:
         print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
         print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
 
+        cfg.mrglik.optim.scl_fct_gamma = observation.shape[-1] * observation.shape[-2]
         bayesianized_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
             'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
 

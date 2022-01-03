@@ -45,11 +45,11 @@ def tv_loss_grad(x):
 
     assert x.shape[-1] == x.shape[-2]
 
-    sign_diff_x =  torch.sign(torch.diff(-x, n=1, dim=-1))
+    sign_diff_x = torch.sign(torch.diff(-x, n=1, dim=-1))
     pad = torch.zeros((1, 1, x.shape[-2], 1), device = x.device)
     diff_x_pad = torch.cat([pad, sign_diff_x, pad], dim=-1)
     grad_tv_x = torch.diff(diff_x_pad, n=1, dim=-1)
-    sign_diff_y =  torch.sign(torch.diff(-x, n=1, dim=-2))
+    sign_diff_y = torch.sign(torch.diff(-x, n=1, dim=-2))
     pad = torch.zeros((1, 1, 1, x.shape[-1]), device = x.device)
     diff_y_pad = torch.cat([pad, sign_diff_y, pad], dim=-2)
     grad_tv_y = torch.diff(diff_y_pad, n=1, dim=-2)

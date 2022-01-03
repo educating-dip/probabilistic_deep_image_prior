@@ -146,10 +146,32 @@ class BayesianizeModel(nn.Module):
         return [gp_prior.cov.log_lengthscale for gp_prior in self.gp_priors
                 if gp_prior.cov.log_lengthscale.requires_grad]
 
+    def set_gp_log_lengthscales_grad(self, grads):
+        
+        assert len(self.gp_priors) == len(grads)
+
+        for gp_prior, grad in zip(self.gp_priors, grads):
+            if gp_prior.cov.log_lengthscale.requires_grad:
+                if gp_prior.cov.log_lengthscale.grad is None: 
+                    gp_prior.cov.log_lengthscale.grad = grad
+                else:
+                    gp_prior.cov.log_lengthscale.grad += grad
+
     @property
     def gp_log_variances(self):
         return [gp_prior.cov.log_variance for gp_prior in self.gp_priors
                 if gp_prior.cov.log_variance.requires_grad]
+    
+    def set_gp_log_variances_grad(self, grads):
+
+        assert len(self.gp_priors) == len(grads)
+
+        for gp_prior, grad in zip(self.gp_priors, grads):
+            if gp_prior.cov.log_variance.requires_grad:
+                if gp_prior.cov.log_variance.grad is None:
+                    gp_prior.cov.log_variance.grad = grad 
+                else: 
+                    gp_prior.cov.log_variance.grad += grad
 
     @property
     def normal_log_variances(self):

@@ -8,3 +8,4 @@ from .fwAD import get_fwAD_model
 from .log_det_grad import compute_exact_log_det_grad, compose_masked_cov_grad_from_modules
 from .approx_log_det_grad import generate_closure, stochastic_LQ_logdet_and_solves, generate_probes, compute_approx_log_det_grad
 from .opt_mrg_lik_obs_space import optim_marginal_lik_low_rank
+from .mc_pred_cp_loss import * 
