@@ -41,8 +41,14 @@ def get_walnut_single_slice_matrix_ray_trafos(cfg, return_torch_module=True,
             proj_col_sub_sampling=proj_col_sub_sampling)
     matrix_ray_trafo = MatrixRayTrafo(matrix,
             im_shape=(cfg.size, cfg.size),
-            proj_shape=(matrix.shape[0],))
-    ray_trafo = matrix_ray_trafo.apply
+            proj_shape=(1, matrix.shape[0],))
+#     ray_trafo = matrix_ray_trafo.apply
+
+    class apply_ray_trafo: 
+            def __call__(self, x):
+                return matrix_ray_trafo.apply(x)
+    ray_trafo = apply_ray_trafo()
+    ray_trafo.range = odl.rn((1, matrix.shape[0],), dtype=np.float32)
 
     pseudoinverse = partial(
             walnut_ray_trafo.apply_fdk, squeeze=True)
@@ -57,11 +63,11 @@ def get_walnut_single_slice_matrix_ray_trafos(cfg, return_torch_module=True,
         ray_trafo_dict['ray_trafo_module'] = (
                 get_matrix_ray_trafo_module(
                         matrix, (cfg.size, cfg.size),
-                        (matrix.shape[0],), sparse=True))
+                        (1, matrix.shape[0],), sparse=True))
         ray_trafo_dict['ray_trafo_module_adj'] = (
                 get_matrix_ray_trafo_module(
                         matrix, (cfg.size, cfg.size),
-                        (matrix.shape[0],), adjoint=True, sparse=True))
+                        (1, matrix.shape[0],), adjoint=True, sparse=True))
         # ray_trafo_dict['pseudoinverse_module'] not implemented
     if return_op_mat:
         ray_trafo_dict['ray_trafo_mat'] = matrix
@@ -109,7 +115,7 @@ def get_walnut_data(cfg):
     observation = walnut_ray_trafo.flat_projs_in_mask(
             walnut_ray_trafo.projs_from_full(observation_full))
 
-    filtbackproj = np.asarray(pseudoinverse(observation))
+    filtbackproj = np.asarray(pseudoinverse(observation)) # TODO 
 
     slice_ind = get_single_slice_ind(
             data_path=data_path_test,
@@ -125,4 +131,4 @@ def get_walnut_data(cfg):
         filtbackproj *= scaling_factor
         ground_truth *= scaling_factor
 
-    return observation, filtbackproj, ground_truth
+    return observation[None], filtbackproj, ground_truth

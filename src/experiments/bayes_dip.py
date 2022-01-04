@@ -94,7 +94,7 @@ def coordinator(cfg : DictConfig) -> None:
         fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
-        proj_recon = ray_trafos['ray_trafo_module'](recon)
+        proj_recon = ray_trafos['ray_trafo_module'](recon.to(bayesianized_model.store_device))
 
         noise_model_variance_obs_space = optim_marginal_lik_low_rank(
             cfg,

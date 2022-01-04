@@ -137,7 +137,7 @@ def get_pretraining_dataset(cfg, return_ray_trafo_torch_module=True,
         ellipses_dataset = DiskDistributedEllipsesDataset(**dataset_specs)
         space = ellipses_dataset.space
         proj_numel = get_walnut_proj_numel(cfg)
-        proj_space = odl.rn(proj_numel, dtype=np.float32)
+        proj_space = odl.rn((1, proj_numel), dtype=np.float32)
         dataset = ellipses_dataset.create_pair_dataset(ray_trafo=ray_trafo,
                 pinv_ray_trafo=pseudoinverse,
                 domain=space, proj_space=proj_space,
