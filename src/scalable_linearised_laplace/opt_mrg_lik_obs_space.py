@@ -115,4 +115,4 @@ def optim_marginal_lik_low_rank(
             writer.add_scalar('predcp', -predcp_loss.item(), i)
             writer.add_scalar('noise_model_variance_obs', torch.exp(log_noise_model_variance_obs).item(), i)
 
-    return torch.exp(log_noise_model_variance_obs).detach()
+    return log_noise_model_variance_obs.detach()

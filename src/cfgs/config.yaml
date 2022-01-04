@@ -4,6 +4,7 @@ defaults:
   - net: unet
   - lin_params: lin_params
   - mrglik: mrglik
+  - density: density
   - trn: trainer
 seed: 1
 linearize_weights: False

@@ -40,7 +40,7 @@ conda activate $env_path
 conda install pytorch torchvision cudatoolkit=$cudatoolkit_version -c pytorch-nightly
 
 # install other conda packages
-conda install tensorboard tensorboardx scikit-image imageio opt_einsum tqdm
+conda install tensorboard tensorboardx scikit-image imageio opt_einsum tqdm tabulate
 
 # install gpytorch package
 conda install gpytorch -c gpytorch
