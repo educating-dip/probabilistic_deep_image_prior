@@ -3,6 +3,7 @@ from .jvp import fwAD_JvP_batch_ensemble, finite_diff_JvP_batch_ensemble
 from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul, vec_weight_prior_cov_mul_base
 import torch
 import numpy as np
+from tqdm import tqdm
 
 # reference for testing
 def agregate_flatten_weight_grad(modules):
@@ -32,12 +33,14 @@ def prior_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hooked_m
     v_params = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, v, bayesianized_model)
 
     # computing v_θ = v_θ * Σ_θ
-    if masked_cov_grads is None: 
-        v_params = vec_weight_prior_cov_mul(bayesianized_model, v_params)
+    if masked_cov_grads is None:
+        with torch.no_grad():
+            v_params = vec_weight_prior_cov_mul(bayesianized_model, v_params)
     # computing v_θ = v_θ * (δΣ_θ / δ_hyperparams)
     else:
         masked_cov_grad_gp_priors, masked_cov_grad_normal_priors = masked_cov_grads
-        v_params = vec_weight_prior_cov_mul_base(bayesianized_model, masked_cov_grad_gp_priors, masked_cov_grad_normal_priors, v_params)
+        with torch.no_grad():
+            v_params = vec_weight_prior_cov_mul_base(bayesianized_model, masked_cov_grad_gp_priors, masked_cov_grad_normal_priors, v_params)
 
     # computing v_obs = v_θ * J.T * A.T 
     if use_fwAD_for_jvp:
@@ -64,20 +67,21 @@ def prior_diag_cov_obs_mat_mul(ray_trafos, filtbackproj, bayesianized_model, hoo
     v = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, v, bayesianized_model) # batch_size, num_params
 
     # computing v_θ = v * Σ_θ
-    if not replace_by_identity: 
-        v_params = vec_weight_prior_cov_mul(bayesianized_model, v) # batch_size, num_params
+    if not replace_by_identity:
+        with torch.no_grad():
+            v_params = vec_weight_prior_cov_mul(bayesianized_model, v) # batch_size, num_params
     # Σ_θ = I
     else: 
         v_params = v
     return (v_params * v).sum(dim=1) + torch.exp(log_noise_model_variance_obs) 
 
 # build Kyy
-def get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grads=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True):
+def get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, be_model, be_modules, log_noise_model_variance_obs, vec_batch_size, masked_cov_grads=None, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True, return_on_cpu=False):
     obs_shape = (1, 1,) + ray_trafos['ray_trafo'].range.shape
     obs_numel = np.prod(obs_shape)
     rows = []
     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
-    for i in range(0, obs_numel, vec_batch_size):
+    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_prior_cov_obs_mat'):
         v[:] = 0.
         # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
@@ -85,9 +89,10 @@ def get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_m
         rows_batch = rows_batch.view(vec_batch_size, -1)
         if i+vec_batch_size > obs_numel:  # last batch
             rows_batch = rows_batch[:obs_numel%vec_batch_size]
+        rows_batch = rows_batch.cpu()  # collect on CPU (saves memory while running the closure)
         rows.append(rows_batch)
     cov_obs_mat = torch.cat(rows, dim=0)
-    return cov_obs_mat
+    return cov_obs_mat if return_on_cpu else cov_obs_mat.to(filtbackproj.device)
 
 # build diag Kyy
 def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, vec_batch_size, replace_by_identity=False):
@@ -95,7 +100,7 @@ def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hoo
     obs_numel = np.prod(obs_shape)
     rows = []
     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
-    for i in range(0, obs_numel, vec_batch_size):
+    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_diag_prior_cov_obs_mat'):
         v[:] = 0.
         # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
@@ -103,6 +108,39 @@ def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hoo
         rows_batch = rows_batch.view(vec_batch_size, -1)
         if i+vec_batch_size > obs_numel:  # last batch
             rows_batch = rows_batch[:obs_numel%vec_batch_size]
-        rows.append(rows_batch)
+        rows.append(rows_batch.cpu())
     diag_cov_obs_mat = torch.cat(rows, dim=0)
-    return diag_cov_obs_mat.squeeze(dim=-1)
+    return diag_cov_obs_mat.squeeze(dim=-1).to(filtbackproj.device)
+
+# # build diag Kyy
+# def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, vec_batch_size, replace_by_identity=False):
+#     obs_shape = (1, 1,) + ray_trafos['ray_trafo'].range.shape
+#     obs_numel = np.prod(obs_shape)
+#     rows = []
+#     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
+#     from tqdm import tqdm
+#     for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_diag_prior_cov_obs_mat'):
+#         v[:] = 0.
+#         # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
+#         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
+
+#         # computing v_θ = e_i * A * J
+#         # v = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, v, bayesianized_model) # batch_size, num_params
+#         # v_out = ray_trafos['ray_trafo_module_adj'](torch.squeeze(v, dim=1)).view(v.shape[0], -1)
+#         v_out = torch.from_numpy(ray_trafos['ray_trafo_mat_adj'][:, i:i+vec_batch_size].T.todense()).to(filtbackproj.device)  # slicing is supported in scipy but not in torch
+
+#         v_out = vec_jac_mul_batch(hooked_model, filtbackproj, v_out, bayesianized_model) # batch_size, num_params
+
+#         # computing v_θ = v * Σ_θ
+#         if not replace_by_identity: 
+#             v_params = vec_weight_prior_cov_mul(bayesianized_model, v_out) # batch_size, num_params
+#         # Σ_θ = I
+#         else: 
+#             v_params = v_out
+#         rows_batch = (v_params * v_out).sum(dim=1) + torch.exp(log_noise_model_variance_obs)
+#         rows_batch = rows_batch.view(vec_batch_size, -1)
+#         if i+vec_batch_size > obs_numel:  # last batch
+#             rows_batch = rows_batch[:obs_numel%vec_batch_size]
+#         rows.append(rows_batch)
+#     diag_cov_obs_mat = torch.cat(rows, dim=0)
+#     return diag_cov_obs_mat.squeeze(dim=-1)
