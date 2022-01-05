@@ -67,7 +67,7 @@ def optim_marginal_lik_low_rank(
                         )
 
     if jacobi_vector is None:
-        jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True).detach()
+        jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=False).detach()
 
     with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt') as pbar:
         for i in pbar:
