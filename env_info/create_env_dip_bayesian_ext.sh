@@ -46,7 +46,7 @@ conda install tensorboard tensorboardx scikit-image imageio opt_einsum tqdm tabu
 conda install gpytorch -c gpytorch
 
 # install astra package (should install version >= 2.0.0)
-conda install astra-toolbox -c astra-toolbox
+conda install astra-toolbox -c astra-toolbox/label/dev
 
 # install pip packages
 pip install hydra-core tensorly https://github.com/odlgroup/odl/archive/master.zip bios
