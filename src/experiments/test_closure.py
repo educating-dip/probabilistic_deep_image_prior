@@ -110,10 +110,14 @@ def coordinator(cfg : DictConfig) -> None:
         print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
         print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
 
+        ray_trafos['ray_trafo_module'].to(reconstructor.device)
+        ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
+
         bayesianized_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
             'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
         modules = bayesianized_model.get_all_modules_under_prior()
         v = observation.repeat(cfg.mrglik.impl.vec_batch_size, 1, 1, 1).to(reconstructor.device)
+        # v = torch.rand(cfg.mrglik.impl.vec_batch_size, 1, *ray_trafos['ray_trafo'].range.shape).to(reconstructor.device)
         log_noise_model_variance_obs = torch.tensor(0.).to(reconstructor.device)
         compare_with_assembled_jac_mat_mul = cfg.name in ['mnist', 'kmnist']
         test_assembled_cov_obs_mat = cfg.name in ['mnist', 'kmnist']
@@ -150,9 +154,6 @@ def coordinator(cfg : DictConfig) -> None:
 
         fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
-
-        ray_trafos['ray_trafo_module'].to(reconstructor.device)
-        ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
 
         if cfg.mrglik.impl.use_fwAD_for_jvp:
             print('using forward-mode AD')

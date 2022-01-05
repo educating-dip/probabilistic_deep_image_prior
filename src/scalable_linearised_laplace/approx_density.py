@@ -6,6 +6,19 @@ from .batch_jac import vec_jac_mul_batch
 from .jvp import fwAD_JvP_batch_ensemble
 from .prior_cov_obs import get_prior_cov_obs_mat
 
+def predictive_cov_image_block_norm(v, cov_image_mat_block):
+    v_out = torch.linalg.solve(cov_image_mat_block, v.T).T
+    return v.T @ v_out
+
+def predictive_image_block_log_prob(recon_masked, ground_truth_masked, predictive_cov_image_block):
+    approx_slogdet = torch.slogdet(predictive_cov_image_block)
+    assert approx_slogdet[0] > 0.
+    approx_log_det = approx_slogdet[1]
+    diff = (ground_truth_masked - recon_masked).flatten()
+    norm = predictive_cov_image_block_norm(diff, predictive_cov_image_block)
+    approx_log_prob = -0.5 * norm - 0.5 * approx_log_det + -0.5 * np.log(2. * np.pi) * ground_truth_masked.numel()
+    return approx_log_prob
+
 def cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules):
     v = vec_jac_mul_batch(hooked_model, filtbackproj, v, bayesianized_model)  # v * J
     v = vec_weight_prior_cov_mul(bayesianized_model, v)  # v * Σ_θ
@@ -13,15 +26,14 @@ def cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_mod
     v = v.view(v.shape[0], -1)
     return v
 
-def predictive_cov_image_block_mul(v, cov_image_mat_block, cov_obs_mat, ray_trafos, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules, obs_shape):
+def predictive_cov_image_block_mul(v, mask, cov_image_mat_block, cov_obs_mat_chol, ray_trafos, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules):
     v_input = v
     v = cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules)
     v = ray_trafos['ray_trafo_module'](v.view(v.shape[0], 1, *ray_trafos['space'].shape)).view(v.shape[0], -1)
-    v = v @ torch.inverse(cov_obs_mat + 0.0025 * torch.mean(cov_obs_mat.diag()) * torch.eye(cov_obs_mat.shape[0], device=cov_obs_mat.device))
-    # v = torch.transpose(torch.linalg.solve(cov_obs_mat, torch.transpose(v, 0, 1)), 0, 1)  # TODO
-    v = ray_trafos['ray_trafo_module_adj'](v.view(v.shape[0], 1, *obs_shape)).view(v.shape[0], -1)
+    v = torch.triangular_solve(torch.triangular_solve(v.T, cov_obs_mat_chol, upper=False)[0], cov_obs_mat_chol.T, upper=True)[0].T
+    v = ray_trafos['ray_trafo_module_adj'](v.view(v.shape[0], 1, *ray_trafos['ray_trafo'].range.shape)).view(v.shape[0], -1)
     v = cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules)
-    v = v_input @ cov_image_mat_block - v
+    v = v_input[:, mask] @ cov_image_mat_block - v[:, mask]
     return v
 
 def get_image_block_slices(image_shape, block_size):
@@ -83,7 +95,7 @@ def get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, 
     return cov_image_mat_block
 
 # block of K_f|y
-def get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, obs_shape, eps=None, cov_image_eps=None, return_cholesky=False):
+def get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=None, cov_image_eps=None, return_cholesky=False):
     cov_image_mat_block = get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=cov_image_eps)
 
     image_shape = (1, 1,) + ray_trafos['space'].shape
@@ -96,8 +108,7 @@ def get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj, 
         # set v[:, mask] to be a subset of rows of torch.eye(block_numel); in last batch, it may contain some additional (zero) rows
         mask_inds_batch = mask_inds[i:i+vec_batch_size]
         v[list(range(len(mask_inds_batch))), mask_inds_batch] = 1.
-        rows_batch = predictive_cov_image_block_mul(v, cov_image_mat_block, cov_obs_mat, ray_trafos, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules, obs_shape)
-        rows_batch = rows_batch[:, mask]
+        rows_batch = predictive_cov_image_block_mul(v, mask, cov_image_mat_block, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules)
         if i+vec_batch_size > block_numel:  # last batch
             rows_batch = rows_batch[:block_numel%vec_batch_size]
         rows.append(rows_batch)
@@ -109,9 +120,8 @@ def get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj, 
 
     return torch.linalg.cholesky(predictive_cov_image_block) if return_cholesky else predictive_cov_image_block
 
-# TODO reimplement via get_predictive_cov_image_block
-def compute_approx_predictive_cov_image_log_det(
-        ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cov_image_eps, block_size, vec_batch_size, cov_obs_mat=None, test_jac=None):
+def predictive_image_log_prob(
+        recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps, cov_image_eps, block_size, vec_batch_size):
 
     device = filtbackproj.device
 
@@ -120,21 +130,13 @@ def compute_approx_predictive_cov_image_log_det(
 
     block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size, flatten=True)
 
-    if cov_obs_mat is None:
-        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True)
+    cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True)
 
-    cov_image_mat_log_det = torch.tensor(0.)
+    image_block_log_probs = []
     for mask in block_masks:
-        if test_jac is not None:
-            cov_image_mat_block = get_cov_image_mat(bayesianized_model, test_jac[mask, :], eps=cov_image_eps)  # K_ff-like block considering only part of the image
-        else:
-            cov_image_mat_block = get_cov_image_mat_block(  # K_ff-like block considering only part of the image
-                    mask, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=cov_image_eps)
+        predictive_cov_image_block = get_predictive_cov_image_block(
+                mask, cov_obs_mat, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=eps, cov_image_eps=cov_image_eps, return_cholesky=False)
 
-        # cov_image_mat_block = cov_image_mat_block.double()
+        image_block_log_probs.append(predictive_image_block_log_prob(recon.flatten()[mask], ground_truth.flatten()[mask], predictive_cov_image_block))
 
-        cov_image_mat_log_det = cov_image_mat_log_det + torch.logdet(cov_image_mat_block)
-
-    predictive_cov_image_log_det = -(torch.logdet(cov_obs_mat) - cov_image_mat_log_det - log_noise_model_variance_obs * cov_obs_mat.shape[0])
-
-    return predictive_cov_image_log_det
+    return torch.sum(torch.stack(image_block_log_probs))

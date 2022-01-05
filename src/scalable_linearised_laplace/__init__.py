@@ -7,7 +7,7 @@ from .batch_ensemble_unet import get_unet_batch_ensemble
 from .fwAD import get_fwAD_model
 from .log_det_grad import compute_exact_log_det_grad, compose_masked_cov_grad_from_modules
 from .approx_log_det_grad import generate_closure, stochastic_LQ_logdet_and_solves, generate_probes, compute_approx_log_det_grad
-from .density import compute_exact_predictive_cov_image_log_det, get_exact_predictive_cov_image_mat
-from .approx_density import compute_approx_predictive_cov_image_log_det, get_predictive_cov_image_block
+from .density import get_exact_predictive_cov_image_mat
+from .approx_density import get_predictive_cov_image_block, predictive_image_log_prob
 from .opt_mrg_lik_obs_space import optim_marginal_lik_low_rank
 from .mc_pred_cp_loss import * 
