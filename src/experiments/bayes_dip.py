@@ -17,11 +17,7 @@ from linearized_weights import weights_linearization
 from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        optim_marginal_lik_low_rank,
-        get_prior_cov_obs_mat, get_predictive_cov_image_block,
-        get_exact_predictive_cov_image_mat)
-from linearized_laplace import image_space_lin_model_post_pred_cov
-from scalable_linearised_laplace.density import get_cov_image_mat
+        optim_marginal_lik_low_rank, predictive_image_log_prob)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -91,11 +87,6 @@ def coordinator(cfg : DictConfig) -> None:
             optim_lin_params = None
             lin_pred = None
 
-        jac = compute_jacobian_single_batch(
-                filtbackproj.to(reconstructor.device),
-                reconstructor.model,
-                bayesianized_model.get_all_modules_under_prior(), example_image.numel())
-
         # type-II MAP
         modules = bayesianized_model.get_all_modules_under_prior()
         add_batch_grad_hooks(reconstructor.model, modules)
@@ -105,6 +96,9 @@ def coordinator(cfg : DictConfig) -> None:
 
         fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
+
+        ray_trafos['ray_trafo_module'].to(bayesianized_model.store_device)
+        ray_trafos['ray_trafo_module_adj'].to(bayesianized_model.store_device)
 
         proj_recon = ray_trafos['ray_trafo_module'](recon.to(bayesianized_model.store_device))
 
@@ -118,50 +112,17 @@ def coordinator(cfg : DictConfig) -> None:
 
         torch.save(bayesianized_model.state_dict(), 
             './bayesianized_model_{}.pt'.format(i))
+        
+        approx_log_prob = predictive_image_log_prob(
+                recon.to(reconstructor.device), example_image.to(reconstructor.device),
+                ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
+                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
+                eps=1e-6, cov_image_eps=1e-6,
+                block_size=cfg.density.block_size_for_approx_log_det,
+                vec_batch_size=cfg.mrglik.impl.vec_batch_size)
 
-        block_priors = BlocksGPpriors(
-            reconstructor.model,
-            bayesianized_model,
-            reconstructor.device,
-            cfg.mrglik.priors.lengthscale_init,
-            cfg.mrglik.priors.variance_init,
-            lin_weights=None
-            )
+        print('approx log prob ', approx_log_prob / example_image.numel())
 
-        predictive_cov_image_exact = get_exact_predictive_cov_image_mat(ray_trafos, bayesianized_model, jac, log_noise_model_variance_obs, eps=1e-6, cov_image_eps=1e-6)
-        print('exact diag min, max: ', torch.min(predictive_cov_image_exact.diag()), torch.mean(predictive_cov_image_exact.diag()), torch.max(predictive_cov_image_exact.diag()))
-        print('exact diag min**0.5, max**0.5: ', torch.min(predictive_cov_image_exact.diag())**0.5, torch.mean(predictive_cov_image_exact.diag())**0.5, torch.max(predictive_cov_image_exact.diag())**0.5)
-
-        ray_trafo_mat = torch.from_numpy(ray_trafos['ray_trafo_mat'])
-        ray_trafo_mat = ray_trafo_mat.view(ray_trafo_mat.shape[0] * ray_trafo_mat.shape[1], -1).to(reconstructor.device)
-        jac_obs = ray_trafo_mat.cuda() @ jac
-        _, _, Kxx_alternative = image_space_lin_model_post_pred_cov(block_priors, jac, jac_obs, torch.exp(log_noise_model_variance_obs))
-        Kyy_alternative = block_priors.matrix_prior_cov_mul(jac_obs) @ jac_obs.transpose(1, 0)
-        Kyy_alternative[np.diag_indices(Kyy_alternative.shape[0])] += torch.exp(log_noise_model_variance_obs)
-
-        predictive_cov_image_exact_Kyy_alternative = get_exact_predictive_cov_image_mat(ray_trafos, bayesianized_model, jac, log_noise_model_variance_obs, eps=1e-6, cov_image_eps=1e-6, cov_obs_mat=Kyy_alternative)
-        print('alternative Kyy exact diag min, max: ', torch.min(predictive_cov_image_exact_Kyy_alternative.diag()), torch.mean(predictive_cov_image_exact_Kyy_alternative.diag()), torch.max(predictive_cov_image_exact_Kyy_alternative.diag()))
-        print('alternative Kyy exact diag min**0.5, max**0.5: ', torch.min(predictive_cov_image_exact_Kyy_alternative.diag())**0.5, torch.mean(predictive_cov_image_exact_Kyy_alternative.diag())**0.5, torch.max(predictive_cov_image_exact_Kyy_alternative.diag())**0.5)
-
-        ray_trafo_mat = torch.from_numpy(ray_trafos['ray_trafo_mat'])
-        ray_trafo_mat = ray_trafo_mat.view(ray_trafo_mat.shape[0] * ray_trafo_mat.shape[1], -1).to(reconstructor.device)
-        jac_y = ray_trafo_mat.cuda() @ jac
-        _, predictive_cov_image_exact2, Kff2 = image_space_lin_model_post_pred_cov(block_priors, jac, jac_y, torch.exp(log_noise_model_variance_obs))
-        print('exact2 diag min, max: ', torch.min(predictive_cov_image_exact2.diag()), torch.mean(predictive_cov_image_exact2.diag()), torch.max(predictive_cov_image_exact2.diag()))
-        print('exact2 diag min**0.5, max**0.5: ', torch.min(predictive_cov_image_exact2.diag())**0.5, torch.mean(predictive_cov_image_exact2.diag())**0.5, torch.max(predictive_cov_image_exact2.diag())**0.5)
-        Kff = get_cov_image_mat(bayesianized_model, jac, eps=1e-6)
-
-        mask = np.ones(example_image.numel(), dtype=bool)
-        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size=cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=True)
-        predictive_cov_image_block = get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, vec_batch_size=cfg.mrglik.impl.vec_batch_size, obs_shape=observation.shape[-2:], eps=1e-6, cov_image_eps=1e-6, return_cholesky=False)
-        print(torch.min(predictive_cov_image_block.diag()), torch.mean(predictive_cov_image_block.diag()), torch.max(predictive_cov_image_block.diag()))
-        print(torch.min(predictive_cov_image_block.diag())**0.5, torch.mean(predictive_cov_image_block.diag())**0.5, torch.max(predictive_cov_image_block.diag())**0.5)
-        err = torch.abs(recon - example_image)
-        print(torch.min(err), torch.mean(err), torch.max(err))
-        breakpoint()
-        import matplotlib.pyplot as plt
-        plt.imshow(predictive_cov_image_block.diag().view(example_image.shape)[0, 0].detach().cpu().numpy())
-        plt.show()
 
 if __name__ == '__main__':
     coordinator()
