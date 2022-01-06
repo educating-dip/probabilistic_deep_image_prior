@@ -69,6 +69,21 @@ class BlocksGPpriors(nn.Module):
             n_weights_all += n_weights_per_block
         return list_idx
 
+    def get_idx_parameters_per_layer(self):
+
+        n_weights_all = 0
+        list_idx_per_layer = []
+        for _, modules_under_prior in zip(
+                self.priors, self.bayesianize_model.ref_modules_under_priors):
+            n_weights_per_block = 0
+            for layer in modules_under_prior:
+                assert isinstance(layer, torch.nn.Conv2d)
+                params = layer.weight.view(-1, *layer.kernel_size).view(-1, layer.kernel_size[0]**2)
+                n_weights_per_layer = params.numel()
+                list_idx_per_layer.append((n_weights_all, n_weights_all + n_weights_per_layer))
+                n_weights_all += n_weights_per_layer
+        return list_idx_per_layer
+
     def get_net_log_det_cov_mat(self):
 
         log_det = torch.zeros(1, device=self.store_device)
@@ -96,20 +111,22 @@ class BlocksGPpriors(nn.Module):
         return log_prob
 
     def get_net_prior_log_prob_linearized_weights(self):
-        # TODO
         log_prob = torch.zeros(1, device=self.store_device)
-        list_idx = self.get_idx_parameters_per_block()
+        list_idx_per_layer = self.get_idx_parameters_per_layer()
+        all_modules_under_prior = self.bayesianize_model.get_all_modules_under_prior()
         for gp_prior, modules_under_gp_prior in zip(
                 self.gp_priors, self.bayesianize_model.ref_modules_under_gp_priors):
             for layer in modules_under_gp_prior:
-                location = self.bayesianize_model.ref_modules_under_priors.index(layer)
-                params = self.lin_weights[list_idx[location]]
+                layer_idx = all_modules_under_prior.index(layer)
+                params = self.lin_weights[slice(*list_idx_per_layer[layer_idx])]
+                params = params.view(-1, layer.kernel_size[0]**2)
                 log_prob += gp_prior.log_prob(params).sum(dim=0)
         for normal_prior, modules_under_normal_prior in zip(
                 self.normal_priors, self.bayesianize_model.ref_modules_under_normal_priors):
             for layer in modules_under_normal_prior:
-                location = self.bayesianize_model.ref_modules_under_priors.index(layer)
-                params = self.lin_weights[list_idx[location]]
+                layer_idx = all_modules_under_prior.index(layer)
+                params = self.lin_weights[slice(*list_idx_per_layer[layer_idx])]
+                params = params.view(-1, layer.kernel_size[0]**2)
                 log_prob += normal_prior.log_prob(params).sum(dim=0)
         return log_prob
 
