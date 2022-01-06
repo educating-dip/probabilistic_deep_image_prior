@@ -40,6 +40,8 @@ def coordinator(cfg : DictConfig) -> None:
 
         cfg.mrglik.optim.include_predcp = False
         # simulate and reconstruct the example image
+        ray_trafos['ray_trafo_module'].to(example_image.device)
+        ray_trafos['ray_trafo_module_adj'].to(example_image.device)
         observation, filtbackproj, example_image = simulate(
             example_image, 
             ray_trafos, 
