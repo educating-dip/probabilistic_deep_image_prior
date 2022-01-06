@@ -95,6 +95,24 @@ class BlocksGPpriors(nn.Module):
                 log_prob += normal_prior.log_prob(params).sum(dim=0)
         return log_prob
 
+    def get_net_prior_log_prob_linearized_weights(self):
+        # TODO
+        log_prob = torch.zeros(1, device=self.store_device)
+        list_idx = self.get_idx_parameters_per_block()
+        for gp_prior, modules_under_gp_prior in zip(
+                self.gp_priors, self.bayesianize_model.ref_modules_under_gp_priors):
+            for layer in modules_under_gp_prior:
+                location = self.bayesianize_model.ref_modules_under_priors.index(layer)
+                params = self.lin_weights[list_idx[location]]
+                log_prob += gp_prior.log_prob(params).sum(dim=0)
+        for normal_prior, modules_under_normal_prior in zip(
+                self.normal_priors, self.bayesianize_model.ref_modules_under_normal_priors):
+            for layer in modules_under_normal_prior:
+                location = self.bayesianize_model.ref_modules_under_priors.index(layer)
+                params = self.lin_weights[list_idx[location]]
+                log_prob += normal_prior.log_prob(params).sum(dim=0)
+        return log_prob
+
     @property
     def priors(self):
         return chain(self.gp_priors, self.normal_priors)

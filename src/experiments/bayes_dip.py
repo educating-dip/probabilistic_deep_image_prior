@@ -12,9 +12,8 @@ import torch
 from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
-from priors_marglik import BayesianizeModel, BlocksGPpriors
+from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
-from linearized_laplace import compute_jacobian_single_batch
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
         optim_marginal_lik_low_rank, predictive_image_log_prob)
@@ -79,12 +78,12 @@ def coordinator(cfg : DictConfig) -> None:
 
         recon = torch.from_numpy(recon[None, None])
         if cfg.linearize_weights:
-            optim_lin_params, lin_pred = weights_linearization(cfg, bayesianized_model, filtbackproj, observation, example_image, reconstructor, ray_trafos)
+            linearized_weights, lin_pred = weights_linearization(cfg, bayesianized_model, filtbackproj, observation, example_image, reconstructor, ray_trafos)
             print('linear reconstruction sample {:d}'.format(i))
             print('PSNR:', PSNR(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
             print('SSIM:', SSIM(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
         else:
-            optim_lin_params = None
+            linearized_weights = None
             lin_pred = None
 
         # type-II MAP
@@ -106,7 +105,8 @@ def coordinator(cfg : DictConfig) -> None:
             cfg,
             observation,
             (recon, proj_recon),
-            ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
+            ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, 
+            linearized_weights=linearized_weights, 
             comment = '_recon_num_' + str(i)
             )
 

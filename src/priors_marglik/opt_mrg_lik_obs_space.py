@@ -146,9 +146,13 @@ def optim_marginal_lik_low_rank(
                 torch.exp(log_noise_model_variance_obs)
             )
 
-            weight_prior_log_prob = \
-                block_priors.get_net_prior_log_prob()
-            
+            if block_priors.lin_weights is not None: 
+                weight_prior_log_prob = \
+                    block_priors.get_net_prior_log_prob_linearized_weights()
+            else:
+                weight_prior_log_prob = \
+                    block_priors.get_net_prior_log_prob()
+
             loss = -(obs_log_density + weight_prior_log_prob - 0.5 * post_hess_log_det)
 
             loss.backward()
