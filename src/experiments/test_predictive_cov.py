@@ -126,7 +126,8 @@ def coordinator(cfg : DictConfig) -> None:
 
         mask = np.ones(example_image.numel(), dtype=bool)
 
-        predictive_cov_image_block = get_predictive_cov_image_block(mask, cov_obs_mat, ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, vec_batch_size=cfg.mrglik.impl.vec_batch_size, eps=1e-6, cov_image_eps=1e-6, return_cholesky=False)
+        cov_obs_mat_chol = torch.linalg.cholesky(cov_obs_mat)
+        predictive_cov_image_block = get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, vec_batch_size=cfg.mrglik.impl.vec_batch_size, eps=1e-6, cov_image_eps=1e-6, return_cholesky=False)
         print('approx diag min, mean, max: ', torch.min(predictive_cov_image_block.diag()).item(), torch.mean(predictive_cov_image_block.diag()).item(), torch.max(predictive_cov_image_block.diag()).item())
         print('approx diag min**0.5, mean**0.5, max**0.5: ', torch.min(predictive_cov_image_block.diag()).item()**0.5, torch.mean(predictive_cov_image_block.diag()).item()**0.5, torch.max(predictive_cov_image_block.diag()).item()**0.5)
 
@@ -146,7 +147,7 @@ def coordinator(cfg : DictConfig) -> None:
         print('diff (predictive_cov_image_block-predictive_cov_image_exact).diag()', torch.sum(torch.abs(predictive_cov_image_block.diag() - predictive_cov_image_exact.diag())))
 
 
-        approx_log_prob = predictive_image_log_prob(
+        approx_log_prob, _, _, _ = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
@@ -154,7 +155,7 @@ def coordinator(cfg : DictConfig) -> None:
                 block_size=cfg.density.block_size_for_approx_log_det,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size)
 
-        approx_log_prob_7 = predictive_image_log_prob(
+        approx_log_prob_7, _, _, _ = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,

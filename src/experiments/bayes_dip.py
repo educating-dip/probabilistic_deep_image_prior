@@ -40,6 +40,8 @@ def coordinator(cfg : DictConfig) -> None:
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if cfg.name in ['mnist', 'kmnist']:
             example_image, _ = data_sample
+            ray_trafos['ray_trafo_module'].to(example_image.device)
+            ray_trafos['ray_trafo_module_adj'].to(example_image.device)
             observation, filtbackproj, example_image = simulate(
                 example_image,
                 ray_trafos,
@@ -112,14 +114,19 @@ def coordinator(cfg : DictConfig) -> None:
 
         torch.save(bayesianized_model.state_dict(), 
             './bayesianized_model_{}.pt'.format(i))
-        
-        approx_log_prob = predictive_image_log_prob(
+        torch.save({'log_noise_model_variance_obs': log_noise_model_variance_obs},
+            './log_noise_model_variance_obs_{}.pt'.format(i))
+
+        approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
                 eps=1e-6, cov_image_eps=1e-6,
                 block_size=cfg.density.block_size_for_approx_log_det,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+
+        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
+            './predictive_image_log_prob_{}.pt'.format(i))
 
         print('approx log prob ', approx_log_prob / example_image.numel())
 

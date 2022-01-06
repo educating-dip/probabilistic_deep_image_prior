@@ -49,6 +49,6 @@ conda install gpytorch -c gpytorch
 conda install astra-toolbox -c astra-toolbox/label/dev
 
 # install pip packages
-pip install hydra-core tensorly https://github.com/odlgroup/odl/archive/master.zip bios
+pip install hydra-core tensorly==0.6.0 https://github.com/odlgroup/odl/archive/master.zip bios
 
 echo -e "created env ${env_path}; to activate it, use:\n\tconda activate ${env_path}"
