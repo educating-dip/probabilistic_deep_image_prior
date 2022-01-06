@@ -43,7 +43,39 @@ SINGLE_SLICE_CONFIGS = {  # first key: walnut_id; second key: orbit_id
             'num_proj_rows': 9,
             'first_proj_row': 474,
         }
-    }
+    },
+    2: {  # walnut_id
+        2: {  # orbit_id
+            'num_slices': 25,
+            'slice_offset': -11,  # source is shifted by ~ -1.1 mm = -11 px
+            'num_proj_rows': 9,
+            'first_proj_row': 474,
+        }
+    },
+    3: {  # walnut_id
+        2: {  # orbit_id
+            'num_slices': 25,
+            'slice_offset': -11,  # source is shifted by ~ -1.1 mm = -11 px
+            'num_proj_rows': 9,
+            'first_proj_row': 474,
+        }
+    },
+    4: {  # walnut_id
+        2: {  # orbit_id
+            'num_slices': 25,
+            'slice_offset': -11,  # source is shifted by ~ -1.1 mm = -11 px
+            'num_proj_rows': 9,
+            'first_proj_row': 475,
+        }
+    },
+    5: {  # walnut_id
+        2: {  # orbit_id
+            'num_slices': 25,
+            'slice_offset': -11,  # source is shifted by ~ -1.1 mm = -11 px
+            'num_proj_rows': 9,
+            'first_proj_row': 474,
+        }
+    },
 }
 
 DEFAULT_SINGLE_SLICE_WALNUT_ID = 1

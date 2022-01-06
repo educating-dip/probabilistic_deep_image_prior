@@ -18,6 +18,8 @@ DATA_PATH = 'walnuts/'
 
 walnut_ray_trafo = get_single_slice_ray_trafo(
         data_path=DATA_PATH,
+        walnut_id=WALNUT_ID,
+        orbit_id=ORBIT_ID,
         angular_sub_sampling=ANGULAR_SUB_SAMPLING,
         proj_col_sub_sampling=PROJ_COL_SUB_SAMPLING)
 
