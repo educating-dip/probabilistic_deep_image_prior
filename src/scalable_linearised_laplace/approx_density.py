@@ -20,6 +20,7 @@ def predictive_image_block_log_prob(recon_masked, ground_truth_masked, predictiv
     approx_log_prob = -0.5 * norm - 0.5 * approx_log_det + -0.5 * np.log(2. * np.pi) * ground_truth_masked.numel()
     return approx_log_prob
 
+# speed bottleneck, for walnut: vec_jac_mul_batch ~ 63%; fwAD_JvP_batch_ensemble ~ 37%
 def cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules):
     v = vec_jac_mul_batch(hooked_model, filtbackproj, v, bayesianized_model)  # v * J
     v = vec_weight_prior_cov_mul(bayesianized_model, v)  # v * Σ_θ
@@ -78,17 +79,17 @@ def get_image_block_masks(image_shape, block_size, flatten=True):
 def get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=None):
 
     image_shape = (1, 1,) + ray_trafos['space'].shape
-    mask_inds = np.nonzero(mask)[0]
+    mask_inds = torch.from_numpy(np.nonzero(mask)[0]).to(filtbackproj.device)
     block_numel = len(mask_inds)
     rows = []
     v = torch.empty((vec_batch_size, np.prod(image_shape)), device=filtbackproj.device)
-    for i in range(0, block_numel, vec_batch_size):
+    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_cov_image_mat_block'):
         v[:] = 0.
         # set v[:, mask] to be a subset of rows of torch.eye(block_numel); in last batch, it may contain some additional (zero) rows
         mask_inds_batch = mask_inds[i:i+vec_batch_size]
         v[list(range(len(mask_inds_batch))), mask_inds_batch] = 1.
         rows_batch = cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules)
-        rows_batch = rows_batch[:, mask]
+        rows_batch = rows_batch[:, mask_inds]
         if i+vec_batch_size > block_numel:  # last batch
             rows_batch = rows_batch[:block_numel%vec_batch_size]
         rows.append(rows_batch)
@@ -106,7 +107,7 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
     block_numel = len(mask_inds)
     rows = []
     v = torch.empty((vec_batch_size, np.prod(image_shape)), device=filtbackproj.device)
-    for i in range(0, block_numel, vec_batch_size):
+    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_predictive_cov_image_block'):
         v[:] = 0.
         # set v[:, mask] to be a subset of rows of torch.eye(block_numel); in last batch, it may contain some additional (zero) rows
         mask_inds_batch = mask_inds[i:i+vec_batch_size]
