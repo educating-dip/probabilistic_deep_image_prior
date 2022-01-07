@@ -14,17 +14,34 @@ def log_homoGauss_grad(mean, y, ray_trafo_module_adj, prec=1):
     return - (prec * ray_trafo_module_adj(y - mean))
 
 def tv_loss_grad(x):
+    # in tv_loss:
+    # dh = torch.abs(x[..., :, 1:] - x[..., :, :-1])
+    # dw = torch.abs(x[..., 1:, :] - x[..., :-1, :])
 
     assert x.shape[-1] == x.shape[-2]
 
-    sign_diff_x = torch.sign(torch.diff(-x, n=1, dim=-1))
-    pad = torch.zeros((1, 1, x.shape[-2], 1), device = x.device)
-    diff_x_pad = torch.cat([pad, sign_diff_x, pad], dim=-1)
+    # for loss ``torch.sum(dh[..., :-1, :] + dw[..., :, :-1])`` (used in tv_loss)
+    pad_x = torch.zeros((1, 1, x.shape[-2], 1), device = x.device)
+    pad_x_short = pad_x[:, :, :-1, :]
+    pad_y = torch.zeros((1, 1, 1, x.shape[-1]), device = x.device)
+    pad_y_short = pad_y[:, :, :, :-1]
+    sign_diff_x = torch.sign(torch.diff(-x[:, :, :-1, :], n=1, dim=-1))
+    diff_x_pad = torch.cat([pad_x, torch.cat([sign_diff_x, pad_y_short], dim=-2), pad_x], dim=-1)
     grad_tv_x = torch.diff(diff_x_pad, n=1, dim=-1)
-    sign_diff_y = torch.sign(torch.diff(-x, n=1, dim=-2))
-    pad = torch.zeros((1, 1, 1, x.shape[-1]), device = x.device)
-    diff_y_pad = torch.cat([pad, sign_diff_y, pad], dim=-2)
+    sign_diff_y = torch.sign(torch.diff(-x[:, :, :, :-1], n=1, dim=-2))
+    diff_y_pad = torch.cat([pad_y, torch.cat([sign_diff_y, pad_x_short], dim=-1), pad_y], dim=-2)
     grad_tv_y = torch.diff(diff_y_pad, n=1, dim=-2)
+
+    # # for loss ``torch.sum(dh) + torch.sum(dw)``
+    # # (which would be summing over all elements in dh and dw, this is not used in the code)
+    # sign_diff_x = torch.sign(torch.diff(-x, n=1, dim=-1))
+    # pad = torch.zeros((1, 1, x.shape[-2], 1), device = x.device)
+    # diff_x_pad = torch.cat([pad, sign_diff_x, pad], dim=-1)
+    # grad_tv_x = torch.diff(diff_x_pad, n=1, dim=-1)
+    # sign_diff_y = torch.sign(torch.diff(-x, n=1, dim=-2))
+    # pad = torch.zeros((1, 1, 1, x.shape[-1]), device = x.device)
+    # diff_y_pad = torch.cat([pad, sign_diff_y, pad], dim=-2)
+    # grad_tv_y = torch.diff(diff_y_pad, n=1, dim=-2)
     
     return grad_tv_x + grad_tv_y
 
