@@ -5,7 +5,7 @@ from linearized_laplace import compute_jacobian_single_batch, agregate_flatten_w
 from linearized_weights.linearized_weights import finite_diff_JvP
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
 from scalable_linearised_laplace.fwAD import get_fwAD_model
-from linearized_weights.conv2d_fwAD import Conv2dFwAD
+from scalable_linearised_laplace.conv2d_fwAD import Conv2dFwAD
 
 class FwAD_JvP_PreserveAndRevertWeightsToParameters(object):
     def __init__(self, modules):

@@ -3,9 +3,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
-from linearized_weights.conv2d_fwAD import Conv2dFwAD, conv2d_fwAD
-from linearized_weights.upsample_fwAD import UpsampleFwAD
-from linearized_weights.group_norm_fwAD import GroupNormFwAD
+from scalable_linearised_laplace.conv2d_fwAD import Conv2dFwAD, conv2d_fwAD
+from scalable_linearised_laplace.upsample_fwAD import UpsampleFwAD
+from scalable_linearised_laplace.group_norm_fwAD import GroupNormFwAD
 
 def construct_conv2d_fwAD(module):
     assert isinstance(module, nn.Conv2d)

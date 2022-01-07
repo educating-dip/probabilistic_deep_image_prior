@@ -21,7 +21,7 @@ from scalable_linearised_laplace.fwAD import get_fwAD_model
 from scalable_linearised_laplace.jvp import (
     finite_diff_JvP, finite_diff_JvP_batch_ensemble,
     fwAD_JvP, fwAD_JvP_batch_ensemble, FwAD_JvP_PreserveAndRevertWeightsToParameters)
-from linearized_weights.conv2d_fwAD import Conv2dFwAD
+from scalable_linearised_laplace.conv2d_fwAD import Conv2dFwAD
 from priors_marglik import BayesianizeModel
 
 
