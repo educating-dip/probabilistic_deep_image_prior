@@ -55,7 +55,6 @@ def coordinator(cfg : DictConfig) -> None:
             )
         # reconstruction - learning MAP estimate weights
         filtbackproj = filtbackproj.to(reconstructor.device)
-        cfg.mrglik.optim.scl_fct_gamma = observation.view(-1).shape[0]
         recon, recon_no_sigmoid = reconstructor.reconstruct(
             observation, 
             filtbackproj, 

@@ -74,7 +74,6 @@ def coordinator(cfg : DictConfig) -> None:
         print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
         print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
 
-        cfg.mrglik.optim.scl_fct_gamma = observation.shape[-1] * observation.shape[-2]
         bayesianized_model = BayesianizeModel(reconstructor, **{'lengthscale_init': cfg.mrglik.priors.lengthscale_init ,
             'variance_init': cfg.mrglik.priors.variance_init}, include_normal_priors=cfg.mrglik.priors.include_normal_priors)
 
@@ -87,7 +86,7 @@ def coordinator(cfg : DictConfig) -> None:
         else:
             linearized_weights = None
             lin_pred = None
-
+        
         # type-II MAP
         modules = bayesianized_model.get_all_modules_under_prior()
         add_batch_grad_hooks(reconstructor.model, modules)

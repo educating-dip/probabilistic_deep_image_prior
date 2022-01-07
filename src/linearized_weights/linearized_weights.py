@@ -4,13 +4,10 @@ import datetime
 import torch
 import numpy as np
 import torch.nn as nn
-from torch.nn import DataParallel
-from collections.abc import Iterable
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from deep_image_prior import tv_loss, PSNR
 from linearized_laplace import agregate_flatten_weight_grad
-from priors_marglik import BayesianizeModel
 
 # jacobian vector product w.r.t. the `weight` parameters of `modules`
 def finite_diff_JvP(x, model, vec, modules, eps=None):
@@ -28,11 +25,11 @@ def finite_diff_JvP(x, model, vec, modules, eps=None):
 
         w_plus = map_weights.clone().detach() + vec * eps
         set_all_weights_block(modules, w_plus)
-        f_plus = model(x)[0]
+        f_plus = model(x, saturation_safety=False)[1] # pre-activation 
 
         w_minus = map_weights.clone().detach() - vec * eps
         set_all_weights_block(modules, w_minus)
-        f_minus = model(x)[0]
+        f_minus = model(x, saturation_safety=False)[1] # pre-activation
 
         JvP = (f_plus - f_minus) / (2 * eps)
         set_all_weights_block(modules, map_weights)
@@ -83,12 +80,13 @@ def list_norm_layers(model):
             norm_layers.append(name + '.bias')
     return norm_layers
 
-def weights_linearization(cfg, bayesianise_model, filtbackproj, observation, ground_truth, reconstructor, ray_trafos):
+def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, ground_truth, reconstructor, ray_trafos):
 
     filtbackproj = filtbackproj.to(reconstructor.device)
     observation = observation.to(reconstructor.device)
     ground_truth = ground_truth.to(reconstructor.device)
-    all_modules_under_prior = bayesianise_model.get_all_modules_under_prior()
+
+    all_modules_under_prior = bayesianised_model.get_all_modules_under_prior()
     map_weights = get_weight_block_vec(all_modules_under_prior).detach()
     ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)
     ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
@@ -103,28 +101,40 @@ def weights_linearization(cfg, bayesianise_model, filtbackproj, observation, gro
     writer = SummaryWriter(log_dir=logdir)
     loss_vec_fd, psnr = [], []
 
+    # if cfg.mrglik.impl.use_fwAD_for_jvp: TODO 
+
+    #     from scalable_linearised_laplace import get_fwAD_model
+    #     from scalable_linearised_laplace import fwAD_JvP
+    #     fwAD_model, fwAD_module_mapping = get_fwAD_model(reconstructor.model, return_module_mapping=True, use_copy='share_parameters')
+    #     fwAD_modules = [fwAD_module_mapping[m] for m in all_modules_under_prior]
+
     reconstructor.model.eval()
     with tqdm(range(cfg.lin_params.iterations)) as pbar:
         for i in pbar:
-            lin_pred = finite_diff_JvP(filtbackproj, reconstructor.model, lin_w_fd, all_modules_under_prior).detach()
-            loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred), observation.to(reconstructor.device)).detach() \
+
+            lin_pred = finite_diff_JvP(filtbackproj, reconstructor.model, lin_w_fd, all_modules_under_prior).detach()            
+             
+            if cfg.net.arch.use_sigmoid:
+                lin_pred = lin_pred.sigmoid()
+
+            loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred), observation.to(reconstructor.device)) \
                 + cfg.net.optim.gamma * tv_loss(lin_pred)
-            v = log_homoGauss_grad(ray_trafo_module(lin_pred), observation, ray_trafo_module_adj).flatten() \
-                + cfg.net.optim.gamma * tv_loss_grad(lin_pred).flatten()
+
+            v = 2 / observation.numel() * log_homoGauss_grad(ray_trafo_module(lin_pred), observation, ray_trafo_module_adj).flatten() \
+                + cfg.net.optim.gamma * tv_loss_grad(lin_pred).flatten() 
+
+            if cfg.net.arch.use_sigmoid:
+                v = v * lin_pred.flatten() * (1 - lin_pred.flatten())
+            
             optimizer.zero_grad()
             reconstructor.model.zero_grad()
-            to_grad = reconstructor.model(filtbackproj)[0].flatten() * v
+            to_grad = reconstructor.model(filtbackproj)[1].flatten() * v
             to_grad.sum().backward()
             lin_w_fd.grad = agregate_flatten_weight_grad(all_modules_under_prior) + cfg.lin_params.wd * lin_w_fd.detach()
             optimizer.step()
 
             loss_vec_fd.append(loss.detach().item())
-            psnr.append(PSNR(lin_pred.cpu().numpy(), ground_truth.cpu().numpy()))
-
-            if i % 100 == 0: 
-                print(torch.sum((lin_w_fd)**2))
-                print(torch.sum((map_weights)**2))
-
+            psnr.append(PSNR(lin_pred.detach().cpu().numpy(), ground_truth.cpu().numpy()))
             pbar.set_postfix({'psnr': psnr[-1]})
             writer.add_scalar('loss', loss_vec_fd[-1], i)
             writer.add_scalar('psnr', psnr[-1], i)

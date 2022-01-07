@@ -54,7 +54,7 @@ def optim_marginal_lik_low_rank(
     if linearized_weights is None: 
         weight_vec = get_weight_block_vec(bayesianized_model.get_all_modules_under_prior())[None]
     else:
-        weight_vec = linearized_weights
+        weight_vec = linearized_weights[None]
 
     log_noise_model_variance_obs = torch.nn.Parameter(
         torch.zeros(1, device=device),
@@ -74,8 +74,7 @@ def optim_marginal_lik_low_rank(
 
             optimizer.zero_grad()
             if cfg.mrglik.optim.include_predcp:
-                assert cfg.mrglik.optim.scl_fct_gamma is not None
-                tv_scaling_fct = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma
+                tv_scaling_fct = cfg.mrglik.optim.scaling_fct * observation.numel() * cfg.mrglik.optim.gamma
                 predcp_loss = set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, fwAD_be_model, fwAD_be_modules, cfg.mrglik.impl.vec_batch_size, tv_scaling_fct, use_fwAD_for_jvp=True)
             else: 
                 predcp_loss = torch.zeros(1)

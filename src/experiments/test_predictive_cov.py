@@ -155,7 +155,7 @@ def coordinator(cfg : DictConfig) -> None:
                 block_size=cfg.density.block_size_for_approx_log_det,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size)
 
-        approx_log_prob_7, _, _, _ = predictive_image_log_prob(
+        approx_log_prob_7, _, _, _ = predictive_image_log_prob( 
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,

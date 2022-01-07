@@ -14,7 +14,8 @@ def marginal_lik_predcp_linear_update(
     cfg, 
     block_priors, 
     Jac_x, 
-    recon
+    recon, 
+    obs_shape
     ):
 
     _, model_prior_cov_list = submatrix_image_space_lin_model_prior_cov(block_priors, Jac_x)
@@ -61,7 +62,7 @@ def marginal_lik_predcp_linear_update(
         first_derivative = first_derivative.detach()
         second_derivative = second_derivative.detach()
         gp_prior.zero_grad()
-        scaling_fct = cfg.mrglik.optim.scaling_fct * cfg.mrglik.optim.scl_fct_gamma * cfg.mrglik.optim.gamma
+        scaling_fct = cfg.mrglik.optim.scaling_fct * obs_shape * cfg.mrglik.optim.gamma
         gp_prior.cov.log_lengthscale.grad = -(-first_derivative + second_derivative) * scaling_fct
         gp_prior.cov.log_variance.grad = -(-first_derivative_log_variances + second_derivative_log_variances ) * scaling_fct
 
@@ -129,7 +130,8 @@ def optim_marginal_lik_low_rank(
                         cfg, 
                         block_priors,
                         Jac,
-                        recon
+                        recon,
+                        observation.numel()
                     )
             else: 
                 predcp_loss = torch.zeros(1)
