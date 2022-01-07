@@ -14,7 +14,6 @@ from tqdm import tqdm
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from linearized_laplace import compute_jacobian_single_batch, agregate_flatten_weight_grad
-from linearized_weights.linearized_weights import finite_diff_JvP
 from scalable_linearised_laplace.batch_ensemble_unet import get_unet_batch_ensemble
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
 from scalable_linearised_laplace.fwAD import get_fwAD_model

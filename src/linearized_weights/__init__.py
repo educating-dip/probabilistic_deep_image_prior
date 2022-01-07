@@ -1,1 +1,1 @@
-from .linearized_weights import weights_linearization, get_weight_block_vec
+from .linearized_weights import weights_linearization

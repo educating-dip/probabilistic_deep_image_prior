@@ -1,7 +1,7 @@
 from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul, vec_weight_prior_cov_mul_base
 from .utils_batch_jac import *
 from .batch_jac import vec_jac_mul_batch, vec_op_jac_mul_batch
-from .jvp import fwAD_JvP, fwAD_JvP_batch_ensemble, preserve_all_weights_block_standard_parameters, revert_all_weights_block_to_standard_parameters
+from .jvp import finite_diff_JvP, get_weight_block_vec, fwAD_JvP, fwAD_JvP_batch_ensemble, preserve_all_weights_block_standard_parameters, revert_all_weights_block_to_standard_parameters
 from .prior_cov_obs import prior_cov_obs_mat_mul, get_prior_cov_obs_mat, prior_diag_cov_obs_mat_mul, get_diag_prior_cov_obs_mat
 from .batch_ensemble_unet import get_unet_batch_ensemble
 from .fwAD import get_fwAD_model

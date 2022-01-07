@@ -6,8 +6,7 @@ import numpy as np
 import torch.autograd as autograd
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from linearized_weights import get_weight_block_vec
-from scalable_linearised_laplace import compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
+from scalable_linearised_laplace import get_weight_block_vec, compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
 from .mc_pred_cp_loss import set_gp_priors_grad_predcp
 
 def set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads, return_loss=False):

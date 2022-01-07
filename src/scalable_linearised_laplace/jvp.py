@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.autograd.forward_ad as fwAD
 from linearized_laplace import compute_jacobian_single_batch, agregate_flatten_weight_grad
-from linearized_weights.linearized_weights import finite_diff_JvP
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
 from scalable_linearised_laplace.fwAD import get_fwAD_model
 from scalable_linearised_laplace.conv2d_fwAD import Conv2dFwAD
@@ -22,7 +21,7 @@ class FwAD_JvP_PreserveAndRevertWeightsToParameters(object):
 # manually call ``preserve_all_weights_block_standard_parameters(modules)``
 # before and ``revert_all_weights_block_to_standard_parameters(modules)`` after
 
-def fwAD_JvP(x, model, vec, modules, eps=None):
+def fwAD_JvP(x, model, vec, modules, pre_activation=False, saturation_safety=True):
 
     assert len(vec.shape) == 1
     assert len(x.shape) == 4
@@ -31,7 +30,7 @@ def fwAD_JvP(x, model, vec, modules, eps=None):
 
     with torch.no_grad(), fwAD.dual_level():
         set_all_weights_block_tangents(modules, vec)
-        out = model(x)[0]
+        out = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
         JvP = fwAD.unpack_dual(out).tangent
 
     return JvP
@@ -41,7 +40,7 @@ def fwAD_JvP(x, model, vec, modules, eps=None):
 # to obtain the original parameters, call
 # ``preserve_all_weights_block_standard_parameters(modules)`` before and
 # ``revert_all_weights_block_to_standard_parameters(modules)`` after
-def fwAD_JvP_batch_ensemble(x, model, vec, modules, eps=None):
+def fwAD_JvP_batch_ensemble(x, model, vec, modules, pre_activation=False, saturation_safety=True):
 
     assert len(vec.shape) == 2
     assert len(x.shape) in (4, 5)
@@ -53,7 +52,7 @@ def fwAD_JvP_batch_ensemble(x, model, vec, modules, eps=None):
 
     with torch.no_grad(), fwAD.dual_level():
         set_all_weights_block_tangents_batch_ensemble(modules, vec)
-        out = model(x)[0]
+        out = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
         JvP = fwAD.unpack_dual(out).tangent
 
     return JvP
@@ -95,7 +94,33 @@ def revert_all_weights_block_to_standard_parameters(modules):
         del layer.bias
         layer.bias = bias
 
-def finite_diff_JvP_batch_ensemble(x, model, vec, modules, eps=None):
+# jacobian vector product w.r.t. the `weight` parameters of `modules`
+def finite_diff_JvP(x, model, vec, modules, eps=None, pre_activation=False, saturation_safety=True):
+
+    assert len(vec.shape) == 1
+    model.eval()
+    with torch.no_grad():
+        map_weights = get_weight_block_vec(modules)
+
+        if eps is None:
+            torch_eps = torch.finfo(vec.dtype).eps
+            w_map_max = map_weights.abs().max().clamp(min=torch_eps)
+            v_max = vec.abs().max().clamp(min=torch_eps)
+            eps = np.sqrt(torch_eps) * (1 + w_map_max) / (2 * v_max)
+
+        w_plus = map_weights.clone().detach() + vec * eps
+        set_all_weights_block(modules, w_plus)
+        f_plus = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
+
+        w_minus = map_weights.clone().detach() - vec * eps
+        set_all_weights_block(modules, w_minus)
+        f_minus = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
+
+        JvP = (f_plus - f_minus) / (2 * eps)
+        set_all_weights_block(modules, map_weights)
+        return JvP
+
+def finite_diff_JvP_batch_ensemble(x, model, vec, modules, eps=None, pre_activation=False, saturation_safety=True):
 
     assert len(vec.shape) == 2
     assert len(x.shape) in (4, 5)
@@ -115,15 +140,30 @@ def finite_diff_JvP_batch_ensemble(x, model, vec, modules, eps=None):
 
         w_plus = map_weights.clone().detach() + vec * eps
         set_all_weights_block_batch_ensemble(modules, w_plus)
-        f_plus = model(x)[0]
+        f_plus = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
 
         w_minus = map_weights.clone().detach() - vec * eps
         set_all_weights_block_batch_ensemble(modules, w_minus)
-        f_minus = model(x)[0]
+        f_minus = model(x, saturation_safety=saturation_safety)[1 if pre_activation else 0]
 
         JvP = (f_plus - f_minus) / (2 * eps)
         set_all_weights_block_batch_ensemble(modules, map_weights)
         return JvP
+
+def set_all_weights_block(modules, weights):
+    n_weights_all = 0
+    for layer in modules:
+        assert isinstance(layer, torch.nn.Conv2d)
+        n_weights = layer.weight.numel()
+        layer.weight.copy_(weights[n_weights_all:n_weights_all+n_weights].view_as(layer.weight))
+        n_weights_all += n_weights
+
+def get_weight_block_vec(modules):
+    ws = []
+    for layer in modules:
+        assert isinstance(layer, torch.nn.Conv2d)
+        ws.append(layer.weight.flatten())
+    return torch.cat(ws)
 
 def set_all_weights_block_batch_ensemble(modules, weights):
     n_weights_all = 0
