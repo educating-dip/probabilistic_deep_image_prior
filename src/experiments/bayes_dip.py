@@ -1,6 +1,7 @@
 import os
 from itertools import islice
 import numpy as np
+import random
 import hydra
 from omegaconf import DictConfig
 from dataset.utils import (
@@ -16,10 +17,13 @@ from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        optim_marginal_lik_low_rank, predictive_image_log_prob)
+        optim_marginal_lik_low_rank, predictive_image_log_prob, get_prior_cov_obs_mat)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
+
+    np.random.seed(cfg.net.torch_manual_seed)
+    random.seed(cfg.net.torch_manual_seed)
 
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
@@ -83,6 +87,10 @@ def coordinator(cfg : DictConfig) -> None:
             print('linear reconstruction sample {:d}'.format(i))
             print('PSNR:', PSNR(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
             print('SSIM:', SSIM(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
+
+            torch.save({'linearized_weights': linearized_weights, 'linearized_prediction': lin_pred},  
+                './linearized_weights_{}.pt'.format(i))
+
         else:
             linearized_weights = None
             lin_pred = None
@@ -116,15 +124,20 @@ def coordinator(cfg : DictConfig) -> None:
         torch.save({'log_noise_model_variance_obs': log_noise_model_variance_obs},
             './log_noise_model_variance_obs_{}.pt'.format(i))
 
+        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
+                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
+                cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
+
         approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
                 eps=1e-6, cov_image_eps=1e-6,
                 block_size=cfg.density.block_size_for_approx,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+                vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
+                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat))
 
-        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
+        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'cov_obs_mat': cov_obs_mat},
             './predictive_image_log_prob_{}.pt'.format(i))
 
         print('approx log prob ', approx_log_prob / example_image.numel())

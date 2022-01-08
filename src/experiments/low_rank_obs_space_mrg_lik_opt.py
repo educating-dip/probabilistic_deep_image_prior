@@ -86,6 +86,9 @@ def coordinator(cfg : DictConfig) -> None:
             print('linear reconstruction sample {:d}'.format(i))
             print('PSNR:', PSNR(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
             print('SSIM:', SSIM(lin_pred[0, 0].cpu().numpy(), example_image[0, 0].cpu().numpy()))
+
+            torch.save({'linearized_weights': linearized_weights, 'linearized_prediction': lin_pred},  
+                './linearized_weights_{}.pt'.format(i))
         else:
             linearized_weights = None
             lin_pred = None
@@ -107,8 +110,15 @@ def coordinator(cfg : DictConfig) -> None:
             Jac_obs, 
             comment = '_no_predcp_recon_num_' + str(i)
             )
+
+        torch.save(bayesianized_model.state_dict(), 
+            './bayesianized_model_no_predcp_{}.pt'.format(i))
         torch.save(block_priors.state_dict(), 
             './block_priors_no_predcp_{}.pt'.format(i))
+        torch.save({'noise_model_variance_obs_space_no_predcp': noise_model_variance_obs_space_no_predcp},
+            './noise_model_variance_obs_space_no_predcp_{}.pt'.format(i))
+
+
         (_, model_post_cov_no_predcp, Kxx_no_predcp) = image_space_lin_model_post_pred_cov(
             block_priors,
             Jac,
@@ -180,8 +190,12 @@ def coordinator(cfg : DictConfig) -> None:
             comment = '_predcp_recon_num_' + str(i)
             )
         
+        torch.save(bayesianized_model.state_dict(), 
+            './bayesianized_model_w_predcp_{}.pt'.format(i))
         torch.save(block_priors.state_dict(), 
             './block_priors_w_predcp_{}.pt'.format(i))
+        torch.save({'noise_model_variance_obs_space_w_predcp': noise_model_variance_obs_space_predcp},
+            './noise_model_variance_obs_space_w_predcp_{}.pt'.format(i))
 
         lik_hess_inv_predcp = Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_predcp\
             + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)

@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from tqdm import tqdm
-from .density import get_cov_image_mat
 from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul
 from .batch_jac import vec_jac_mul_batch
 from .jvp import fwAD_JvP_batch_ensemble
@@ -30,7 +29,7 @@ def cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_mod
 
 # v @ K_f|y
 def predictive_cov_image_block_mul(v, mask, cov_obs_mat_chol, ray_trafos, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules, cov_image_eps=None):
-    v_input = v
+    # v_input = v
     v_cov_image = cov_image_mul(v, filtbackproj, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules)
     if cov_image_eps is not None:
         v_cov_image = v_cov_image + cov_image_eps * v
@@ -121,17 +120,25 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
             rows_batch = rows_batch[:block_numel%vec_batch_size]
         rows.append(rows_batch)
     predictive_cov_image_block = torch.cat(rows, dim=0)
+    
+    suceed = False
+    cnt = 0
     if eps is not None:
         predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += eps
-
-    assert torch.all(predictive_cov_image_block.diag() > 0.)
-
+    while not suceed:
+        try:
+            assert torch.all(predictive_cov_image_block.diag() > 0.)
+            suceed = True
+        except:
+            predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += eps
+            cnt += 1
+            assert cnt < 1000 # safety 
+    
     return torch.linalg.cholesky(predictive_cov_image_block) if return_cholesky else predictive_cov_image_block
 
 def predictive_image_log_prob(
         recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None):
 
-    device = filtbackproj.device
 
     block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size, flatten=True)
 
