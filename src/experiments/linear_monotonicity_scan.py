@@ -127,6 +127,9 @@ def coordinator(cfg : DictConfig) -> None:
 
     for i, (example_image, _) in enumerate(loader):
 
+        if cfg.seed is not None:
+            torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
+
         # simulate and reconstruct the example image
         observation, filtbackproj, example_image = simulate(example_image, 
             ray_trafos, cfg.noise_specs)

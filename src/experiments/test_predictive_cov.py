@@ -41,6 +41,10 @@ def coordinator(cfg : DictConfig) -> None:
         raise NotImplementedError
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
+
+        if cfg.seed is not None:
+            torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
+
         if cfg.name in ['mnist', 'kmnist']:
             example_image, _ = data_sample
             observation, filtbackproj, example_image = simulate(

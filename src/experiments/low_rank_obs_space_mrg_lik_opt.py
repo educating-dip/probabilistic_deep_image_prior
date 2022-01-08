@@ -38,6 +38,9 @@ def coordinator(cfg : DictConfig) -> None:
     #     with redirect_stdout(f):
     for i, (example_image, _) in enumerate(loader):
 
+        if cfg.seed is not None:
+            torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
+
         cfg.mrglik.optim.include_predcp = False
         # simulate and reconstruct the example image
         ray_trafos['ray_trafo_module'].to(example_image.device)

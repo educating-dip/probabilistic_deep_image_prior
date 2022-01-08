@@ -22,9 +22,6 @@ from scalable_linearised_laplace import (
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
-    np.random.seed(cfg.net.torch_manual_seed)
-    random.seed(cfg.net.torch_manual_seed)
-
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
     ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'],
@@ -42,6 +39,10 @@ def coordinator(cfg : DictConfig) -> None:
         raise NotImplementedError
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
+
+        if cfg.seed is not None:
+            torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
+
         if cfg.name in ['mnist', 'kmnist']:
             example_image, _ = data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
