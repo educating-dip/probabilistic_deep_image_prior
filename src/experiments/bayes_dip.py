@@ -52,6 +52,8 @@ def coordinator(cfg : DictConfig) -> None:
                 ray_trafos,
                 cfg.noise_specs
                 )
+            torch.save({'observation': observation, 'filtbackproj': filtbackproj, 'ground_truth': example_image},
+                    './sample_{}.pt'.format(i))
         elif cfg.name == 'walnut':
             observation, filtbackproj, example_image = data_sample
         else:
@@ -129,16 +131,18 @@ def coordinator(cfg : DictConfig) -> None:
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
                 cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
 
+        torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
+
         approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                eps=1e-6, cov_image_eps=1e-6,
+                eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
                 cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat))
 
-        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'cov_obs_mat': cov_obs_mat},
+        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
             './predictive_image_log_prob_{}.pt'.format(i))
 
         print('approx log prob ', approx_log_prob / example_image.numel())

@@ -1,1 +1,3 @@
 block_size_for_approx: 28
+eps: 1e-6
+cov_image_eps: 1e-6
