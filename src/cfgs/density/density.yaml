@@ -1,4 +1,4 @@
-block_size_for_approx: 28
+block_size_for_approx: 100
 eps: 1e-6
 cov_image_eps: 1e-6
 compute_single_predictive_cov_block:
