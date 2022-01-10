@@ -92,7 +92,7 @@ class DeepImagePriorReconstructor():
         best_output, pre_activation_best_output = model_out[0].detach(), model_out[1].detach()
         best_params_state_dict = deepcopy(self.model.state_dict())
 
-        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar) as pbar:
+        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar, miniters=self.cfg.optim.iterations//100) as pbar:
             for i in pbar:
                 self.optimizer.zero_grad()
                 model_out = self.model(self.net_input)
@@ -115,7 +115,7 @@ class DeepImagePriorReconstructor():
                 if ground_truth is not None:
                     best_output_psnr = PSNR(best_output.detach().cpu(), ground_truth.cpu())
                     output_psnr = PSNR(output.detach().cpu(), ground_truth.cpu())
-                    pbar.set_postfix({'output_psnr': output_psnr})
+                    pbar.set_description('DIP output_psnr={:.1f}'.format(output_psnr), refresh=False)
                     self.writer.add_scalar('best_output_psnr', best_output_psnr, i)
                     self.writer.add_scalar('output_psnr', output_psnr, i)
 
