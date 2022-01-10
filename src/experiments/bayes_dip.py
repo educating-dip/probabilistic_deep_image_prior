@@ -22,6 +22,9 @@ from scalable_linearised_laplace import (
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
+    if cfg.use_double:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
     ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'],
@@ -47,8 +50,11 @@ def coordinator(cfg : DictConfig) -> None:
             example_image, _ = data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
             ray_trafos['ray_trafo_module_adj'].to(example_image.device)
+            if cfg.use_double:
+                ray_trafos['ray_trafo_module'].to(torch.float64)
+                ray_trafos['ray_trafo_module_adj'].to(torch.float64)
             observation, filtbackproj, example_image = simulate(
-                example_image,
+                example_image.double() if cfg.use_double else example_image, 
                 ray_trafos,
                 cfg.noise_specs
                 )
@@ -58,6 +64,11 @@ def coordinator(cfg : DictConfig) -> None:
             observation, filtbackproj, example_image = data_sample
         else:
             raise NotImplementedError
+
+        if cfg.use_double:
+            observation = observation.double()
+            filtbackproj = filtbackproj.double()
+            example_image = example_image.double()
 
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
@@ -110,6 +121,9 @@ def coordinator(cfg : DictConfig) -> None:
 
         ray_trafos['ray_trafo_module'].to(bayesianized_model.store_device)
         ray_trafos['ray_trafo_module_adj'].to(bayesianized_model.store_device)
+        if cfg.use_double:
+            ray_trafos['ray_trafo_module'].to(torch.float64)
+            ray_trafos['ray_trafo_module_adj'].to(torch.float64)
 
         proj_recon = ray_trafos['ray_trafo_module'](recon.to(bayesianized_model.store_device))
 
@@ -119,7 +133,8 @@ def coordinator(cfg : DictConfig) -> None:
             (recon, proj_recon),
             ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, 
             linearized_weights=linearized_weights, 
-            comment = '_recon_num_' + str(i)
+            comment = '_recon_num_' + str(i),
+            use_jacobi_vector=True,
             )
 
         torch.save(bayesianized_model.state_dict(), 

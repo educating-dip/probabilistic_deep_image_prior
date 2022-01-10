@@ -9,3 +9,4 @@ defaults:
 seed: 1
 linearize_weights: False
 num_images: 1
+use_double: False

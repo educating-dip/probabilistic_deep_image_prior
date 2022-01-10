@@ -31,7 +31,7 @@ def optim_marginal_lik_low_rank(
     observation,
     recon,
     ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
-    jacobi_vector=None,
+    use_jacobi_vector=True,
     linearized_weights=None, 
     comment=''
     ):
@@ -65,10 +65,12 @@ def optim_marginal_lik_low_rank(
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
-    if jacobi_vector is None:
+    if use_jacobi_vector:
         jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=False).detach()
+    else:
+        jacobi_vector = None
 
-    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt') as pbar:
+    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//100) as pbar:
         for i in pbar:
 
             optimizer.zero_grad()

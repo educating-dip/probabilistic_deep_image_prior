@@ -1,4 +1,5 @@
 import os
+from itertools import islice
 import hydra
 import torch
 import numpy as np
@@ -20,6 +21,9 @@ from linearized_weights import weights_linearization
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
+    if cfg.use_double:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     np.random.seed(cfg.net.torch_manual_seed)
     random.seed(cfg.net.torch_manual_seed)
 
@@ -36,7 +40,7 @@ def coordinator(cfg : DictConfig) -> None:
     # filename = os.path.join(os.getcwd(), 'results.txt')
     # with open(filename, 'w') as f:
     #     with redirect_stdout(f):
-    for i, (example_image, _) in enumerate(loader):
+    for i, (example_image, _) in enumerate(islice(loader, cfg.num_images)):
 
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
@@ -45,11 +49,18 @@ def coordinator(cfg : DictConfig) -> None:
         # simulate and reconstruct the example image
         ray_trafos['ray_trafo_module'].to(example_image.device)
         ray_trafos['ray_trafo_module_adj'].to(example_image.device)
+        if cfg.use_double:
+            ray_trafos['ray_trafo_module'].to(torch.float64)
+            ray_trafos['ray_trafo_module_adj'].to(torch.float64)
         observation, filtbackproj, example_image = simulate(
-            example_image, 
+            example_image.double() if cfg.use_double else example_image, 
             ray_trafos, 
             cfg.noise_specs
             )
+        if cfg.use_double:
+            observation = observation.double()
+            filtbackproj = filtbackproj.double()
+            example_image = example_image.double()
         dip_ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'], 
                             'reco_space': ray_trafos['space']}
         reconstructor = DeepImagePriorReconstructor(
@@ -80,6 +91,8 @@ def coordinator(cfg : DictConfig) -> None:
             )
         trafos = extract_trafos_as_matrices(ray_trafos)
         trafo = trafos[0]
+        if cfg.use_double:
+            trafo = trafo.to(torch.float64)
         proj_recon = trafo @ recon.flatten()
         Jac_obs = trafo.cuda() @ Jac
 
@@ -248,9 +261,6 @@ def coordinator(cfg : DictConfig) -> None:
 
         np.savez('test_log_lik_info_{}'.format(i), **dict)
         np.savez('recon_info_{}'.format(i), **data)
-
-        if i >= cfg.num_images:
-            break
     
     print('\n****************************************\n')
     print('Bayes DIP MLL: {:.4f}+/-{:.4f}\nB1:{:.4f}+/-{:.4f}\nB2:{:.4f}+/-{:.4f}\nBayes DIP Type-II MAP:{:.4f}+/-{:.4f}'.format(

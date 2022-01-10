@@ -88,7 +88,7 @@ def get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, 
     block_numel = len(mask_inds)
     rows = []
     v = torch.empty((vec_batch_size, np.prod(image_shape)), device=filtbackproj.device)
-    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_cov_image_mat_block'):
+    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_cov_image_mat_block', miniters=block_numel//vec_batch_size//100):
         v[:] = 0.
         # set v[:, mask] to be a subset of rows of torch.eye(block_numel); in last batch, it may contain some additional (zero) rows
         mask_inds_batch = mask_inds[i:i+vec_batch_size]
@@ -110,7 +110,7 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
     block_numel = len(mask_inds)
     rows = []
     v = torch.empty((vec_batch_size, np.prod(image_shape)), device=filtbackproj.device)
-    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_predictive_cov_image_block'):
+    for i in tqdm(range(0, block_numel, vec_batch_size), desc='get_predictive_cov_image_block', miniters=block_numel//vec_batch_size//100):
         v[:] = 0.
         # set v[:, mask] to be a subset of rows of torch.eye(block_numel); in last batch, it may contain some additional (zero) rows
         mask_inds_batch = mask_inds[i:i+vec_batch_size]

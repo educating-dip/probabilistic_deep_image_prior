@@ -81,7 +81,7 @@ def get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_m
     obs_numel = np.prod(obs_shape)
     rows = []
     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
-    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_prior_cov_obs_mat'):
+    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_prior_cov_obs_mat', miniters=obs_numel//vec_batch_size//100):
         v[:] = 0.
         # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
@@ -100,7 +100,7 @@ def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hoo
     obs_numel = np.prod(obs_shape)
     rows = []
     v = torch.empty((vec_batch_size,) + obs_shape, device=filtbackproj.device)
-    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_diag_prior_cov_obs_mat'):
+    for i in tqdm(range(0, obs_numel, vec_batch_size), desc='get_diag_prior_cov_obs_mat', miniters=obs_numel//vec_batch_size//100):
         v[:] = 0.
         # set v.view(vec_batch_size, -1) to be a subset of rows of torch.eye(obs_numel); in last batch, it may contain some additional (zero) rows
         v.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)

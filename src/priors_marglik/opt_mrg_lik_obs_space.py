@@ -120,7 +120,7 @@ def optim_marginal_lik_low_rank(
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
-    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt') as pbar:
+    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//100) as pbar:
         for i in pbar:
 
             optimizer.zero_grad()
@@ -177,5 +177,6 @@ def optim_marginal_lik_low_rank(
             writer.add_scalar('weight_prior_log_prob', weight_prior_log_prob.item(), i)
             writer.add_scalar('predcp', -predcp_loss.item(), i)
             writer.add_scalar('noise_model_variance_obs', torch.exp(log_noise_model_variance_obs).item(), i)
+
 
     return torch.exp(log_noise_model_variance_obs).detach()

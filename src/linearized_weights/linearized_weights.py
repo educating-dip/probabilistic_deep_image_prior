@@ -83,7 +83,7 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
         fwAD_modules = [fwAD_module_mapping[m] for m in all_modules_under_prior]
 
     reconstructor.model.eval()
-    with tqdm(range(cfg.lin_params.iterations)) as pbar:
+    with tqdm(range(cfg.lin_params.iterations), miniters=cfg.lin_params.iterations//100) as pbar:
         for i in pbar:
 
             if cfg.mrglik.impl.use_fwAD_for_jvp:
@@ -112,7 +112,7 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
 
             loss_vec_fd.append(loss.detach().item())
             psnr.append(PSNR(lin_pred.detach().cpu().numpy(), ground_truth.cpu().numpy()))
-            pbar.set_postfix({'psnr': psnr[-1]})
+            pbar.set_description('psnr={:.1f}'.format(psnr[-1]), refresh=False)
             writer.add_scalar('loss', loss_vec_fd[-1], i)
             writer.add_scalar('psnr', psnr[-1], i)
 
