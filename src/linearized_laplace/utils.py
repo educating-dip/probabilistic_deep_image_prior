@@ -30,7 +30,7 @@ def gaussian_log_prob(
         except:
             covariance_matrix[np.diag_indices(X.shape[0])] += 1e-6
             cnt += 1
-            assert cnt < 1000
+            assert cnt < 1000 # safety 
 
     log_prob = dist.log_prob(X)
     return log_prob / X.shape[0]

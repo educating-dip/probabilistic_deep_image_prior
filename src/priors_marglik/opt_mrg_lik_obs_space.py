@@ -120,7 +120,7 @@ def optim_marginal_lik_low_rank(
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
-    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//100) as pbar:
+    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//10) as pbar:
         for i in pbar:
 
             optimizer.zero_grad()

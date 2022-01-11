@@ -148,6 +148,17 @@ def coordinator(cfg : DictConfig) -> None:
 
         torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
 
+        suceed = False
+        cnt = 0
+        while not suceed:
+            try:
+                cov_obs_mat_chol = torch.linalg.cholesky(cov_obs_mat)
+                suceed = True
+            except:
+                cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += cfg.density.eps
+                cnt += 1
+                assert cnt < 1000 # safety 
+
         approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
@@ -155,11 +166,11 @@ def coordinator(cfg : DictConfig) -> None:
                 eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
-                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat))
+                cov_obs_mat_chol=cov_obs_mat_chol)
 
         torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
             './predictive_image_log_prob_{}.pt'.format(i))
-
+        
         print('approx log prob ', approx_log_prob / example_image.numel())
 
 

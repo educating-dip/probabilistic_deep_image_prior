@@ -37,9 +37,6 @@ def coordinator(cfg : DictConfig) -> None:
     ray_trafos = get_standard_ray_trafos(cfg, return_op_mat=True)
     test_log_lik_no_predcp_list, test_log_lik_noise_model_unit_var_list, \
          test_log_lik_noise_model_list, test_log_lik_predcp_list  = [], [], [], []
-    # filename = os.path.join(os.getcwd(), 'results.txt')
-    # with open(filename, 'w') as f:
-    #     with redirect_stdout(f):
     for i, (example_image, _) in enumerate(islice(loader, cfg.num_images)):
 
         if cfg.seed is not None:
@@ -247,8 +244,6 @@ def coordinator(cfg : DictConfig) -> None:
                 'image': example_image.cpu().numpy(), 
                 'recon': recon,
                 'recon_no_sigmoid': recon_no_sigmoid, 
-                'Jac': Jac.cpu().numpy(), 
-                'Jac_obs': Jac_obs.cpu().numpy(),
                 'noise_model_variance_obs_space_predcp': noise_model_variance_obs_space_predcp.item(), 
                 'noise_model_variance_obs_space_no_predcp': noise_model_variance_obs_space_no_predcp.item(),
                 'noise_model_no_predcp': lik_hess_inv_no_predcp.cpu().numpy(),
