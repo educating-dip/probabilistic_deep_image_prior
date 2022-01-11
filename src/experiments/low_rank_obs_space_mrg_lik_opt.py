@@ -140,21 +140,24 @@ def coordinator(cfg : DictConfig) -> None:
             Jac_obs, 
             noise_model_variance_obs_space_no_predcp
             )
+        
         # pseudo-inverse computation
         trafo_T_trafo = trafo.cuda().T @ trafo.cuda()
         U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100)
         lik_hess_inv_no_predcp = Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_no_predcp \
             + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
+        
         # for baselines's sake  
         lik_hess_inv_unit_var = Vh.T @ torch.diag(1/S) @ U.T \
             + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
         assert lik_hess_inv_no_predcp.diag().min() > 0 
+
         # computing test-loglik MLL
         test_log_lik_no_predcp = gaussian_log_prob(
             example_image.flatten().cuda(),
             torch.from_numpy(recon).flatten().cuda(),
             model_post_cov_no_predcp, 
-            None
+            lik_hess_inv_no_predcp
             )
         # baselines 
         test_log_lik_noise_model_unit_var = gaussian_log_prob(
@@ -226,7 +229,7 @@ def coordinator(cfg : DictConfig) -> None:
                 example_image.flatten().cuda(),
                 torch.from_numpy(recon).flatten().cuda(),
                 model_post_cov_predcp,
-                None
+                lik_hess_inv_predcp
                 )
 
         print('log_lik post marginal likelihood optim: {}'\
