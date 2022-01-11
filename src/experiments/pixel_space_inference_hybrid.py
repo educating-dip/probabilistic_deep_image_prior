@@ -7,6 +7,7 @@ if nb_dir not in sys.path:
     sys.path.append(nb_dir)
     print(nb_dir)
 
+
 from jax.lib import xla_bridge
 print(xla_bridge.get_backend().platform)
 
@@ -33,8 +34,8 @@ from sklearn.neighbors import KernelDensity
 
 
 img_side = 28
-num_angles = 5
-noise_std = 0.1
+num_angles = 10  #5
+noise_std_prop = 0.05 # 0.1
 
 op_mat = gen_op_mat(img_side, num_angles)
 
@@ -47,10 +48,10 @@ test_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=False))
 
 # %% Settings
 
-warmup = 10000
-n_samples = 10000
-thinning = 2
-num_chains = 5
+warmup = 2000 # 10000
+n_samples = 6000 # 10000
+thinning = 2 # 2
+num_chains = 5 # 5
 
 N_images_val = 10
 N_images_test = 20
@@ -67,7 +68,7 @@ optimisation_stop_length = 1000
 
 # %% logging structures
 
-savedir = './save/Hybrid_HMC/'
+savedir = '../save/Hybrid_HMC_10_005/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
@@ -100,11 +101,12 @@ for n_im in range(N_images_val):
     (example_image, _) = next(test_dset)
     image_np = example_image.numpy().flatten()
     observation = op_mat @ image_np
-    observation += np.random.randn(*observation.shape) * noise_std * jnp.abs(observation).mean()
-    
-    # draw samples
-    model = partial(sampling_model, observation, op_mat, best_lambd, best_std)
-    samples = draw_samples(model, warmup, n_samples, thinning, num_chains)
+    observation += np.random.randn(*observation.shape) * noise_std_prop * jnp.abs(observation).mean()
+
+       # draw samples
+    # init_dict = {'x': sigmoid(params['x']), 'AR_p': sigmoid(params['AR_p'])}
+    model = partial(sampling_model, observation, op_mat, best_lambd, best_std, noise_std_prop)
+    samples = draw_samples(model, warmup, n_samples, thinning, num_chains, init_dict={})
 
     reconstruction_mean = samples['x'].mean(axis=0)
     xmean_psnr = psnr(reconstruction_mean, image_np, smax=1)
@@ -113,13 +115,15 @@ for n_im in range(N_images_val):
 
     test_psnr_list.append(xmean_psnr)
     test_LL_list.append(LL)
+
+    print('LL', LL)
     
     test_result_dict[f'im_{n_im}_samples'] = samples
     test_result_dict[f'im_{n_im}_xmean_psnr'] = xmean_psnr
     test_result_dict[f'im_{n_im}_LL'] = LL
 
-    # Optimise from random init
 
+    # Optimise from random init
     key = random.PRNGKey(0)
     for n_opt in range(N_optimisation_restarts):
         key = random.split(key)[0]
@@ -128,7 +132,7 @@ for n_im in range(N_images_val):
         params['x'] = jax.scipy.special.logit((jax.random.normal(key, shape=(784,)) * 0.35 + 0.1307 ).clip(a_min=1e-3, a_max=1-1e-3))  # sample from marginal distribution of data roughly
         params['AR_p'] = jnp.zeros(1) * 0
 
-        objective = optimisation_objective_gen(observation, best_lambd, best_std, op_mat)
+        objective = optimisation_objective_gen(observation, best_lambd, best_std, op_mat, noise_std_prop)
 
         opt_init, opt_update, get_params = optimizers.adam(optimisation_stepsize) #optimizers.momentum(step_size, mass=0.5)
         opt_state = opt_init(params)
@@ -149,18 +153,18 @@ for n_im in range(N_images_val):
                 print(i, LL)
 
         map_psnr =  psnr(sigmoid(params['x']), image_np, smax=1)
+        print('optim map psnr', map_psnr)
         test_opt_psnr_mat[n_im, n_opt] = map_psnr
         test_result_dict[f'im_{n_im}_opt_{n_opt}_x'] = sigmoid(params['x'])
         test_result_dict[f'im_{n_im}_opt_{n_opt}_psnr'] = map_psnr
 
 
     # optimise from true optima to find best optima of objective 
-
     params = {}
     params['x'] = jax.scipy.special.logit(image_np.clip(min=1e-3, max=1-1e-3))  # sample from marginal distribution of data roughly
     params['AR_p'] = jnp.zeros(1) * 0
 
-    objective = optimisation_objective_gen(observation, best_lambd, best_std, op_mat)
+    objective = optimisation_objective_gen(observation, best_lambd, best_std, op_mat, noise_std_prop)
 
     opt_init, opt_update, get_params = optimizers.adam(optimisation_stepsize) #optimizers.momentum(step_size, mass=0.5)
     opt_state = opt_init(params)

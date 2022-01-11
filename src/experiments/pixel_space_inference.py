@@ -30,13 +30,13 @@ numpyro.set_host_device_count(5)
 
 
 img_side = 28
-num_angles = 5
-noise_std = 0.1
+num_angles = 10  #5
+noise_std_prop = 0.05 # 0.1
 
 op_mat = gen_op_mat(img_side, num_angles)
 
 
-kmnist_path = './data/kmnist'
+kmnist_path = '/scratch4/ja666/dip_bayesian_ext/kmnist'
 
 train_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=True))
 test_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=False))
@@ -52,8 +52,8 @@ num_chains = 5
 N_images_val = 10
 N_images_test = 20
 
-prior_std_list = [1e-2, 0.05, 1e-1, 0.5, 1, 5, 10]
-TV_lambda_list = [10, 50, 100, 500, 1000, 5000, 10000]
+prior_std_list = [1e-2, 0.05, 1e-1, 0.5, 1, 5, 10] # switch to 1
+TV_lambda_list = [10, 50, 100, 500, 1000, 5000, 10000] # switch to 1000
 bandwidth_list = [1e-2, 0.05, 1e-1, 0.5, 1]
 
 N_optimisation_restarts = 5
@@ -64,9 +64,9 @@ optimisation_stop_length = 1000
 
 # %% logging structures
 
-model_mode = 'Gaussian' #'Gaussian'
+model_mode = 'TV' #'Gaussian'
 
-savedir = f'./save/{model_mode}_HMC/'
+savedir = f'../save/{model_mode}_HMC_10_005/'
 os.makedirs(savedir, exist_ok=True)
 
 hyperparam_search_result_dict = {}
@@ -103,10 +103,10 @@ if parameter_vector is not None:
         
         image_np = example_image.numpy().flatten()
         observation = op_mat @ image_np
-        observation += np.random.randn(*observation.shape) * noise_std * jnp.abs(observation).mean()
+        observation += np.random.randn(*observation.shape) * noise_std_prop * jnp.abs(observation).mean()
         
         for n_param, param in enumerate(parameter_vector):
-            model = partial(sampling_model, observation, op_mat, param)
+            model = partial(sampling_model, observation, op_mat, param, noise_std_prop)
 
             samples = draw_samples(model, warmup, n_samples, thinning, num_chains)
             reconstruction_mean = samples['x'].mean(axis=0)
@@ -142,9 +142,9 @@ for n_im in range(N_images_val):
         
     image_np = example_image.numpy().flatten()
     observation = op_mat @ image_np
-    observation += np.random.randn(*observation.shape) * noise_std *  jnp.abs(observation).mean()
+    observation += np.random.randn(*observation.shape) * noise_std_prop *  jnp.abs(observation).mean()
     
-    model = partial(sampling_model, observation, op_mat, best_param)
+    model = partial(sampling_model, observation, op_mat, best_param, noise_std_prop)
     samples = draw_samples(model, warmup, n_samples, thinning, num_chains)
     
     for bw_idx, bw in enumerate(bandwidth_list):
@@ -187,10 +187,10 @@ for n_im in range(N_images_val):
     (example_image, _) = next(test_dset)
     image_np = example_image.numpy().flatten()
     observation = op_mat @ image_np
-    observation += np.random.randn(*observation.shape) * noise_std * jnp.abs(observation).mean()
+    observation += np.random.randn(*observation.shape) * noise_std_prop * jnp.abs(observation).mean()
     
     # draw samples
-    model = partial(sampling_model, observation, op_mat, best_param)
+    model = partial(sampling_model, observation, op_mat, best_param, noise_std_prop)
     samples = draw_samples(model, warmup, n_samples, thinning, num_chains)
 
     reconstruction_mean = samples['x'].mean(axis=0)
@@ -215,7 +215,7 @@ for n_im in range(N_images_val):
         params['x'] = jax.scipy.special.logit((jax.random.normal(key, shape=(784,)) * 0.35 + 0.1307 ).clip(a_min=1e-3, a_max=1-1e-3))  # sample from marginal distribution of data roughly
         params['AR_p'] = jnp.zeros(1) * 0
 
-        objective = optimisation_objective_gen(observation, best_param, op_mat)
+        objective = optimisation_objective_gen(observation, best_param, op_mat, noise_std_prop)
 
         opt_init, opt_update, get_params = optimizers.adam(optimisation_stepsize) #optimizers.momentum(step_size, mass=0.5)
         opt_state = opt_init(params)
@@ -247,7 +247,7 @@ for n_im in range(N_images_val):
     params['x'] = jax.scipy.special.logit(image_np.clip(min=1e-3, max=1-1e-3))  # sample from marginal distribution of data roughly
     params['AR_p'] = jnp.zeros(1) * 0
 
-    objective = optimisation_objective_gen(observation, best_param, op_mat)
+    objective = optimisation_objective_gen(observation, best_param, op_mat, noise_std_prop)
 
     opt_init, opt_update, get_params = optimizers.adam(optimisation_stepsize) #optimizers.momentum(step_size, mass=0.5)
     opt_state = opt_init(params)
