@@ -1,7 +1,10 @@
 import torch 
 import numpy as np
+import warnings
 from gpytorch.utils.lanczos import lanczos_tridiag_to_diag
-from gpytorch.utils import StochasticLQ, linear_cg
+from gpytorch.utils import StochasticLQ
+# from gpytorch.utils import linear_cg
+from .gpytorch_linear_cg import linear_cg
 from .prior_cov_obs import prior_cov_obs_mat_mul
 from .log_det_grad import compose_masked_cov_grad_from_modules
 from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul_base
@@ -31,7 +34,7 @@ def generate_closure(ray_trafos, filtbackproj, bayesianized_model, hooked_model,
     return closure
 
 
-def stochastic_LQ_logdet_and_solves(closure, probe_vectors, max_cg_iter, tolerance, jacobi_vector=None):
+def stochastic_LQ_logdet_and_solves(closure, probe_vectors, max_cg_iter, tolerance, jacobi_vector=None, ignore_numerical_warning=False):
 
     num_random_probes = probe_vectors.shape[1]
     side_length = probe_vectors.shape[0]
@@ -47,20 +50,20 @@ def stochastic_LQ_logdet_and_solves(closure, probe_vectors, max_cg_iter, toleran
         logdet_correction = 0
         conditioned_probes = probe_vectors_scaled
 
-    solves, tmat = linear_cg(closure, probe_vectors_scaled, n_tridiag=num_random_probes, tolerance=tolerance,
+    solves, tmat, residual_norm = linear_cg(closure, probe_vectors_scaled, n_tridiag=num_random_probes, tolerance=tolerance,
                         eps=1e-10, stop_updating_after=1e-10, max_iter=max_cg_iter,
                         max_tridiag_iter=max_cg_iter-1, preconditioner=preconditioning_closure)
-    
+
     # estimate log-determinant
     slq = StochasticLQ(max_iter=-1, num_random_probes=num_random_probes)
     pos_eigvals, pos_eigvecs = lanczos_tridiag_to_diag(tmat)
     (logdet_term,) = slq.evaluate((side_length, side_length), pos_eigvals, pos_eigvecs, [lambda x: x.log()])
     
     conditioned_scaled_probes = conditioned_probes * probe_vector_norms.pow(2)  # we re-introduce the norms to make sure probes are K=I
-    return solves, conditioned_scaled_probes, logdet_term + logdet_correction 
+    return solves, conditioned_scaled_probes, logdet_term + logdet_correction, residual_norm
 
 
-def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, side_length, use_fwAD_for_jvp=True, jacobi_vector=None):
+def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, side_length, use_fwAD_for_jvp=True, jacobi_vector=None, ignore_numerical_warning=False):
     
     grads = {}
 
@@ -70,7 +73,8 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     probe_vectors = generate_probes(side_length=np.prod(side_length), num_random_probes=vec_batch_size, device=bayesianized_model.store_device, jacobi_vector=jacobi_vector) 
     gp_priors_grad_dict, normal_priors_grad_dict, log_noise_variance_obs_grad_dict = compose_masked_cov_grad_from_modules(bayesianized_model, log_noise_model_variance_obs.detach())
 
-    solves, cs_probes, log_det_term  = stochastic_LQ_logdet_and_solves(main_closure, probe_vectors, max_cg_iter=50, tolerance=1, jacobi_vector=jacobi_vector)
+    solves, cs_probes, log_det_term, residual_norm = stochastic_LQ_logdet_and_solves(main_closure, probe_vectors, max_cg_iter=50, tolerance=1, jacobi_vector=jacobi_vector, ignore_numerical_warning=ignore_numerical_warning)
+    mean_residual = residual_norm.mean()
 
     solves_reshape = solves.T.view(vec_batch_size, *side_length)
     solves_AJ_reshape = vec_op_jac_mul_batch(ray_trafos, hooked_model, filtbackproj, solves_reshape, bayesianized_model)
@@ -98,7 +102,7 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj, bayesianized_model, ho
     solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model, log_noise_variance_obs_grad_dict['gp_prior'], log_noise_variance_obs_grad_dict['normal_prior'], solves_AJ)    
     grads[log_noise_model_variance_obs] = 0.5 * (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
     
-    return grads, log_det_term
+    return grads, log_det_term, mean_residual
 
 def generate_jacobi_closure(jacobi_vec, eps=1e-3):
     assert len(jacobi_vec.shape) == 1

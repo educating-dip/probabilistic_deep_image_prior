@@ -3,6 +3,8 @@ from itertools import islice
 import numpy as np
 import random
 import hydra
+import warnings
+from gpytorch.utils.warnings import NumericalWarning
 from omegaconf import DictConfig
 from dataset.utils import (
         get_standard_ray_trafos,
@@ -24,6 +26,9 @@ def coordinator(cfg : DictConfig) -> None:
 
     if cfg.use_double:
         torch.set_default_tensor_type(torch.DoubleTensor)
+
+    if cfg.ignore_gpytorch_numerical_warnings:
+        warnings.simplefilter('ignore', NumericalWarning)
 
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 

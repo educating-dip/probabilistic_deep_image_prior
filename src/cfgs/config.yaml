@@ -13,3 +13,4 @@ use_double: False
 hydra:
   run:
     dir: outputs/${now:%Y-%m-%dT%H:%M:%S.%fZ}
+ignore_gpytorch_numerical_warnings: True

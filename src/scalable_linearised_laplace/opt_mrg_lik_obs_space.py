@@ -81,12 +81,13 @@ def optim_marginal_lik_low_rank(
                 predcp_loss = torch.zeros(1)
 
             # update grads for post_hess_log_det
-            grads, log_det_term = compute_approx_log_det_grad(
+            grads, log_det_term, log_det_grad_cg_mean_residual = compute_approx_log_det_grad(
                     ray_trafos, filtbackproj,
                     bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
                     log_noise_model_variance_obs,
                     cfg.mrglik.impl.vec_batch_size, side_length=observation_shape,
-                    use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, jacobi_vector=jacobi_vector)
+                    use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, jacobi_vector=jacobi_vector,
+                    ignore_numerical_warning=True)
             
             set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads)
 
@@ -114,5 +115,6 @@ def optim_marginal_lik_low_rank(
             writer.add_scalar('log_det_term', log_det_term.item(), i)
             writer.add_scalar('predcp', -predcp_loss.item(), i)
             writer.add_scalar('noise_model_variance_obs', torch.exp(log_noise_model_variance_obs).item(), i)
+            writer.add_scalar('log_det_grad_cg_mean_residual', log_det_grad_cg_mean_residual.item(), i)
 
     return log_noise_model_variance_obs.detach()

@@ -12,3 +12,4 @@ priors:
 impl:
   use_fwAD_for_jvp: True
   vec_batch_size: 2
+  log_grad_cg_residual: True

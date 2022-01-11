@@ -193,7 +193,7 @@ def coordinator(cfg : DictConfig) -> None:
     if cfg.name in ['mnist', 'kmnist']:
 
         diag_cov_obs_mat = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True)
-        approx_hyperparams_grads, _ = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, side_length=observation.shape[1:],  use_fwAD_for_jvp=True, jacobi_vector=diag_cov_obs_mat)
+        approx_hyperparams_grads, _, _ = compute_approx_log_det_grad(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, side_length=observation.shape[1:],  use_fwAD_for_jvp=True, jacobi_vector=diag_cov_obs_mat)
 
         # testing exact Hessian posterior logdet grads w.r.t. hyperparams
         refs_hyperparams_grads = check_hyperparams_grad(block_priors, Kyy)
