@@ -38,6 +38,8 @@ def coordinator(cfg : DictConfig) -> None:
     test_log_lik_no_predcp_list, test_log_lik_noise_model_unit_var_list, \
          test_log_lik_noise_model_list, test_log_lik_predcp_list  = [], [], [], []
     for i, (example_image, _) in enumerate(islice(loader, cfg.num_images)):
+        if i < cfg.get('skip_first_images', 0):
+            continue
 
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate

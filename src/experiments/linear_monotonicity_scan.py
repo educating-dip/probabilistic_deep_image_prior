@@ -126,6 +126,8 @@ def coordinator(cfg : DictConfig) -> None:
     ray_trafos = get_standard_ray_trafos(cfg, return_op_mat=True)
 
     for i, (example_image, _) in enumerate(loader):
+        if i < cfg.get('skip_first_images', 0):
+            continue
 
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate

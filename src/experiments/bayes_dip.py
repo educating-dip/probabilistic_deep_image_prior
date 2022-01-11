@@ -47,6 +47,8 @@ def coordinator(cfg : DictConfig) -> None:
         raise NotImplementedError
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
+        if i < cfg.get('skip_first_images', 0):
+            continue
 
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate

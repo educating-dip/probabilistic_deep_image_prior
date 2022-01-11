@@ -45,6 +45,8 @@ def coordinator(cfg : DictConfig) -> None:
     device = torch.device(('cuda:0' if torch.cuda.is_available() else 'cpu'))
 
     for i, _ in enumerate(islice(loader, cfg.num_images)):
+        if i < cfg.get('skip_first_images', 0):
+            continue
 
         # merge predictive image log probs of single blocks in order to compute an approx. log prob of the full image
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)

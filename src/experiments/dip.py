@@ -31,12 +31,16 @@ def coordinator(cfg : DictConfig) -> None:
         raise NotImplementedError
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
+        if i < cfg.get('skip_first_images', 0):
+            continue
 
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
         if cfg.name in ['mnist', 'kmnist']:
             example_image, _ = data_sample
+            ray_trafos['ray_trafo_module'].to(example_image.device)
+            ray_trafos['ray_trafo_module_adj'].to(example_image.device)
             observation, filtbackproj, example_image = simulate(
                 example_image,
                 ray_trafos,
@@ -49,8 +53,11 @@ def coordinator(cfg : DictConfig) -> None:
 
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
+        ray_trafos['ray_trafo_module'].to(reconstructor.device)
+        ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
+
         recon, _ = reconstructor.reconstruct(
-                observation, fbp=filtbackproj, ground_truth=example_image)
+                observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device))
 
         torch.save(reconstructor.model.state_dict(),
                 './dip_model_{}.pt'.format(i))
