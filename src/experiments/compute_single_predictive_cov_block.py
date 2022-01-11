@@ -31,6 +31,9 @@ from scalable_linearised_laplace import (
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
+    if cfg.use_double:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
     ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'],
@@ -61,17 +64,28 @@ def coordinator(cfg : DictConfig) -> None:
             example_image, _ = data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
             ray_trafos['ray_trafo_module_adj'].to(example_image.device)
+            if cfg.use_double:
+                ray_trafos['ray_trafo_module'].to(torch.float64)
+                ray_trafos['ray_trafo_module_adj'].to(torch.float64)
             observation, filtbackproj, example_image = simulate(
-                example_image,
+                example_image.double() if cfg.use_double else example_image, 
                 ray_trafos,
                 cfg.noise_specs
                 )
             sample_dict = torch.load(os.path.join(load_path, 'sample_{}.pt'.format(i)), map_location=example_image.device)
             assert torch.allclose(sample_dict['filtbackproj'], filtbackproj)
+            # filtbackproj = sample_dict['filtbackproj']
+            # observation = sample_dict['observation']
+            # example_image = sample_dict['ground_truth']
         elif cfg.name == 'walnut':
             observation, filtbackproj, example_image = data_sample
         else:
             raise NotImplementedError
+
+        if cfg.use_double:
+            observation = observation.double()
+            filtbackproj = filtbackproj.double()
+            example_image = example_image.double()
 
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
@@ -124,6 +138,9 @@ def coordinator(cfg : DictConfig) -> None:
 
         ray_trafos['ray_trafo_module'].to(bayesianized_model.store_device)
         ray_trafos['ray_trafo_module_adj'].to(bayesianized_model.store_device)
+        if cfg.use_double:
+            ray_trafos['ray_trafo_module'].to(torch.float64)
+            ray_trafos['ray_trafo_module_adj'].to(torch.float64)
 
         bayesianized_model.load_state_dict(torch.load(os.path.join(
                 load_path, 'bayesianized_model_{}.pt'.format(i)),
@@ -133,6 +150,8 @@ def coordinator(cfg : DictConfig) -> None:
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
 
         cov_obs_mat = torch.load(os.path.join(load_path, 'cov_obs_mat_{}.pt'.format(i)), map_location=reconstructor.device)['cov_obs_mat']
+
+        cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += 0.01 * cov_obs_mat.diag().mean()
 
 
         # compute predictive image log prob for block
