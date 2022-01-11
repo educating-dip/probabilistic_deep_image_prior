@@ -231,7 +231,7 @@ def coordinator(cfg : DictConfig) -> None:
             .format(test_log_lik_predcp), flush=True)
         test_log_lik_predcp_list.append(test_log_lik_predcp.item())
 
-        dict = {'cfgs': cfg,
+        dict = {
                 'test_log_lik':{
                     'test_loglik_type-II-MAP': test_log_lik_predcp.item(),
                     'test_loglik_MLL': test_log_lik_no_predcp.item(),
@@ -260,13 +260,13 @@ def coordinator(cfg : DictConfig) -> None:
     print('\n****************************************\n')
     print('Bayes DIP MLL: {:.4f}+/-{:.4f}\nB1:{:.4f}+/-{:.4f}\nB2:{:.4f}+/-{:.4f}\nBayes DIP Type-II MAP:{:.4f}+/-{:.4f}'.format(
             np.mean(test_log_lik_no_predcp_list),
-            np.std(test_log_lik_no_predcp_list)/np.sqrt(cfg.num_images + 1), 
+            np.std(test_log_lik_no_predcp_list)/np.sqrt(cfg.num_images), 
             np.mean(test_log_lik_noise_model_unit_var_list),
-            np.std(test_log_lik_noise_model_unit_var_list)/np.sqrt(cfg.num_images + 1),
+            np.std(test_log_lik_noise_model_unit_var_list)/np.sqrt(cfg.num_images),
             np.mean(test_log_lik_noise_model_list),
-            np.std(test_log_lik_noise_model_list)/np.sqrt(cfg.num_images + 1),
+            np.std(test_log_lik_noise_model_list)/np.sqrt(cfg.num_images),
             np.mean(test_log_lik_predcp_list),
-            np.std(test_log_lik_predcp_list)/np.sqrt(cfg.num_images + 1)
+            np.std(test_log_lik_predcp_list)/np.sqrt(cfg.num_images)
     ), 
     flush=True)
 

@@ -83,7 +83,7 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
         fwAD_modules = [fwAD_module_mapping[m] for m in all_modules_under_prior]
 
     reconstructor.model.eval()
-    with tqdm(range(cfg.lin_params.iterations), miniters=cfg.lin_params.iterations//100) as pbar:
+    with tqdm(range(cfg.lin_params.iterations), miniters=cfg.lin_params.iterations//1000) as pbar:
         for i in pbar:
 
             if cfg.mrglik.impl.use_fwAD_for_jvp:

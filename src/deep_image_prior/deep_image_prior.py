@@ -92,7 +92,7 @@ class DeepImagePriorReconstructor():
         best_output, pre_activation_best_output = model_out[0].detach(), model_out[1].detach()
         best_params_state_dict = deepcopy(self.model.state_dict())
 
-        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar, miniters=self.cfg.optim.iterations//10) as pbar:
+        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar, miniters=self.cfg.optim.iterations//100) as pbar:
             for i in pbar:
                 self.optimizer.zero_grad()
                 model_out = self.model(self.net_input)

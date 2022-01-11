@@ -155,14 +155,16 @@ def coordinator(cfg : DictConfig) -> None:
 
         suceed = False
         cnt = 0
+        eps = cov_obs_mat.diag().mean() * cfg.density.eps
         while not suceed:
             try:
                 cov_obs_mat_chol = torch.linalg.cholesky(cov_obs_mat)
                 suceed = True
             except:
-                cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += cfg.density.eps
+                cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += eps
                 cnt += 1
-                assert cnt < 1000 # safety 
+                assert cnt < 10000 # safety
+        print('cholesky required eps {}'.format(cnt * eps), flush=True)
 
         approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),

@@ -70,7 +70,7 @@ def optim_marginal_lik_low_rank(
     else:
         jacobi_vector = None
 
-    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//100) as pbar:
+    with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//10) as pbar:
         for i in pbar:
 
             optimizer.zero_grad()
