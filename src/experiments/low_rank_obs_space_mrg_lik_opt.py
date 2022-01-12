@@ -1,4 +1,3 @@
-import os
 from itertools import islice
 import hydra
 import torch
@@ -6,7 +5,6 @@ import numpy as np
 import random
 import tensorly as tl
 tl.set_backend('pytorch')
-import torch.nn as nn
 from omegaconf import DictConfig
 from dataset.mnist import simulate
 from dataset.utils import load_testset_MNIST_dataset, load_testset_KMNIST_dataset, get_standard_ray_trafos
@@ -14,7 +12,6 @@ from dataset import extract_trafos_as_matrices
 from deep_image_prior import DeepImagePriorReconstructor
 from priors_marglik import *
 from linearized_laplace import compute_jacobian_single_batch, image_space_lin_model_post_pred_cov, gaussian_log_prob
-from contextlib import redirect_stdout
 from deep_image_prior.utils import PSNR, SSIM
 from linearized_weights import weights_linearization
 
@@ -93,7 +90,7 @@ def coordinator(cfg : DictConfig) -> None:
         if cfg.use_double:
             trafo = trafo.to(torch.float64)
         proj_recon = trafo @ recon.flatten()
-        Jac_obs = trafo.cuda() @ Jac
+        Jac_obs = trafo.to(reconstructor.device) @ Jac
 
         # opt-marginal-likelihood w/o predcp
         if cfg.linearize_weights:
@@ -133,7 +130,6 @@ def coordinator(cfg : DictConfig) -> None:
         torch.save({'noise_model_variance_obs_space_no_predcp': noise_model_variance_obs_space_no_predcp},
             './noise_model_variance_obs_space_no_predcp_{}.pt'.format(i))
 
-
         (_, model_post_cov_no_predcp, Kxx_no_predcp) = image_space_lin_model_post_pred_cov(
             block_priors,
             Jac,
@@ -142,34 +138,35 @@ def coordinator(cfg : DictConfig) -> None:
             )
         
         # pseudo-inverse computation
-        trafo_T_trafo = trafo.cuda().T @ trafo.cuda()
-        U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100)
-        lik_hess_inv_no_predcp = Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_no_predcp \
-            + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
+        trafo_T_trafo = trafo.to(block_priors.store_device).T @ trafo.to(block_priors.store_device)
+        U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
+        lik_hess_inv_no_predcp_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_no_predcp).diag().mean()
+        lik_hess_inv_no_predcp = lik_hess_inv_no_predcp_diag_meam * torch.eye(example_image.numel(), device=block_priors.store_device)
+        # + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
         
-        # for baselines's sake  
-        lik_hess_inv_unit_var = Vh.T @ torch.diag(1/S) @ U.T \
-            + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
+        # for baselines's sake
+        lik_hess_inv_unit_var = (Vh.T @ torch.diag(1/S) @ U.T).diag().mean() * torch.eye(example_image.numel(), device=block_priors.store_device)
+        # + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
         assert lik_hess_inv_no_predcp.diag().min() > 0 
 
         # computing test-loglik MLL
         test_log_lik_no_predcp = gaussian_log_prob(
-            example_image.flatten().cuda(),
-            torch.from_numpy(recon).flatten().cuda(),
+            example_image.flatten().to(block_priors.store_device),
+            torch.from_numpy(recon).flatten().to(block_priors.store_device),
             model_post_cov_no_predcp, 
             lik_hess_inv_no_predcp
             )
-        # baselines 
+        # baselines
         test_log_lik_noise_model_unit_var = gaussian_log_prob(
-            example_image.flatten().cuda(),
-            torch.from_numpy(recon).flatten().cuda(),
+            example_image.flatten().to(block_priors.store_device),
+            torch.from_numpy(recon).flatten().to(block_priors.store_device),
             None, 
             lik_hess_inv_unit_var
             )
 
         test_log_lik_noise_model = gaussian_log_prob(
-            example_image.flatten().cuda(),
-            torch.from_numpy(recon).flatten().cuda(),
+            example_image.flatten().to(block_priors.store_device),
+            torch.from_numpy(recon).flatten().to(block_priors.store_device),
             None,
             lik_hess_inv_no_predcp
             )
@@ -215,9 +212,10 @@ def coordinator(cfg : DictConfig) -> None:
         torch.save({'noise_model_variance_obs_space_w_predcp': noise_model_variance_obs_space_predcp},
             './noise_model_variance_obs_space_w_predcp_{}.pt'.format(i))
 
-        lik_hess_inv_predcp = Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_predcp\
-            + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
-
+        lik_hess_inv_predcp_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T * noise_model_variance_obs_space_predcp).diag().mean() # costructing tsvd-pseudoinverse
+        # + 5e-4 * torch.eye(U.shape[0], device=block_priors.store_device)
+        lik_hess_inv_predcp = lik_hess_inv_predcp_diag_mean * torch.eye(example_image.numel(), device=block_priors.store_device)
+        
         (_, model_post_cov_predcp, Kxx_predcp) = image_space_lin_model_post_pred_cov(
                 block_priors,
                 Jac, 
@@ -226,8 +224,8 @@ def coordinator(cfg : DictConfig) -> None:
                 )
 
         test_log_lik_predcp = gaussian_log_prob(
-                example_image.flatten().cuda(),
-                torch.from_numpy(recon).flatten().cuda(),
+                example_image.flatten().to(block_priors.store_device),
+                torch.from_numpy(recon).flatten().to(block_priors.store_device),
                 model_post_cov_predcp,
                 lik_hess_inv_predcp
                 )
