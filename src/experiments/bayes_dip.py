@@ -164,7 +164,7 @@ def coordinator(cfg : DictConfig) -> None:
                 eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
-                cov_obs_mat_chol=cov_obs_mat_chol)
+                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat))
 
         torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
             './predictive_image_log_prob_{}.pt'.format(i))
