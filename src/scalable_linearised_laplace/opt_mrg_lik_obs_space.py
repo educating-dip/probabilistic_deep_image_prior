@@ -76,7 +76,7 @@ def optim_marginal_lik_low_rank(
             optimizer.zero_grad()
             if cfg.mrglik.optim.include_predcp:
                 tv_scaling_fct = cfg.mrglik.optim.scaling_fct * observation.numel() * cfg.mrglik.optim.gamma
-                predcp_loss = set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, fwAD_be_model, fwAD_be_modules, cfg.mrglik.impl.vec_batch_size, tv_scaling_fct, use_fwAD_for_jvp=True)
+                predcp_loss = set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, fwAD_be_model, fwAD_be_modules, cfg.mrglik.optim.tv_samples, cfg.mrglik.impl.vec_batch_size, tv_scaling_fct, use_fwAD_for_jvp=True)
             else: 
                 predcp_loss = torch.zeros(1)
 

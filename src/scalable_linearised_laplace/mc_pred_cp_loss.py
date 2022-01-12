@@ -1,3 +1,4 @@
+from math import ceil
 import torch
 import torch.autograd as autograd
 from .vec_weight_prior_mul_closure import compose_cov_from_modules, fast_prior_cov_mul
@@ -43,16 +44,22 @@ def compute_log_hyperparams_grads(first_derivative_grad_log_hyperparams, second_
     return grads
 
 
-def set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, be_model, be_modules, mc_samples, tv_scaling_fct, use_fwAD_for_jvp=True):
-
+def set_gp_priors_grad_predcp(hooked_model, filtbackproj, bayesianized_model, be_model, be_modules, mc_samples, vec_batch_size, tv_scaling_fct, use_fwAD_for_jvp=True):
+    num_batches = ceil(mc_samples / vec_batch_size)
+    mc_samples = num_batches * vec_batch_size
     sample_weight_vec = _sample_from_prior_over_weights(bayesianized_model, mc_samples)
-    if use_fwAD_for_jvp:
-        s_image = fwAD_JvP_batch_ensemble(filtbackproj, be_model, sample_weight_vec.detach(), be_modules)
-    else:
-        s_image = finite_diff_JvP_batch_ensemble(filtbackproj, be_model, sample_weight_vec.detach(), be_modules)
-    s_image = s_image.squeeze(dim=1) # remove trivial sample-batch dimension (be_model uses B_ensemble x B_sample x C x H x W)
-    tv_s_image_grad = batch_tv_grad(s_image)
-    v_jac_mul = vec_jac_mul_batch(hooked_model, filtbackproj, tv_s_image_grad.view(mc_samples, -1), bayesianized_model)
+    v_jac_mul = []
+    for i in range(num_batches):
+        sample_weight_vec_batch = sample_weight_vec.detach()[i*vec_batch_size:(i+1)*vec_batch_size]
+        if use_fwAD_for_jvp:
+            s_image = fwAD_JvP_batch_ensemble(filtbackproj, be_model, sample_weight_vec_batch, be_modules)
+        else:
+            s_image = finite_diff_JvP_batch_ensemble(filtbackproj, be_model, sample_weight_vec_batch, be_modules)
+        s_image = s_image.squeeze(dim=1) # remove trivial sample-batch dimension (be_model uses B_ensemble x B_sample x C x H x W)
+        tv_s_image_grad = batch_tv_grad(s_image)
+        v_jac_mul_batch = vec_jac_mul_batch(hooked_model, filtbackproj, tv_s_image_grad.view(vec_batch_size, -1), bayesianized_model).detach()
+        v_jac_mul.append(v_jac_mul_batch)
+    v_jac_mul = torch.cat(v_jac_mul, axis=0)
     loss = (sample_weight_vec * v_jac_mul.detach()).sum(dim=1).mean(dim=0)
     first_derivative_grad_log_lengthscales = autograd.grad(loss, bayesianized_model.gp_log_lengthscales, allow_unused=True, create_graph=True, retain_graph=True)
     first_derivative_grad_log_variances = autograd.grad(loss, bayesianized_model.gp_log_variances, allow_unused=True, create_graph=True, retain_graph=True)
