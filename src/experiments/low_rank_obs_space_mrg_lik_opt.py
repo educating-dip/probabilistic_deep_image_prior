@@ -65,19 +65,28 @@ def coordinator(cfg : DictConfig) -> None:
             )
         # reconstruction - learning MAP estimate weights
         filtbackproj = filtbackproj.to(reconstructor.device)
-        recon, recon_no_sigmoid = reconstructor.reconstruct(
-            observation, 
-            filtbackproj, 
-            example_image
-            )
+        if cfg.load_dip_models_from_path is not None:
+            path = os.path.join(cfg.load_dip_models_from_path, 'dip_model_{}.pt'.format(i))
+            print('loading model for {} reconstruction from {}'.format(cfg.name, path))
+            reconstructor.model.load_state_dict(torch.load(path, map_location=reconstructor.device))
+            with torch.no_grad():
+                reconstructor.model.eval()
+                recon, recon_no_sigmoid = reconstructor.model.forward(filtbackproj)
+            recon = recon[0, 0].cpu().numpy()
+        else:
+            recon, recon_no_sigmoid = reconstructor.reconstruct(
+                observation, fbp=filtbackproj, ground_truth=example_image)
+            torch.save(reconstructor.model.state_dict(),
+                    './dip_model_{}.pt'.format(i))
+        print('DIP reconstruction of sample {:d}'.format(i))
+        print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
+        print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
         bayesianized_model = BayesianizeModel(
                 reconstructor, **{
                     'lengthscale_init': cfg.mrglik.priors.lengthscale_init,
                     'variance_init': cfg.mrglik.priors.variance_init},
                     include_normal_priors=cfg.mrglik.priors.include_normal_priors)
         all_modules_under_prior = bayesianized_model.get_all_modules_under_prior()
-        torch.save(reconstructor.model.state_dict(),
-                './reconstructor_model_{}.pt'.format(i))
         # estimate the Jacobian
         Jac = compute_jacobian_single_batch(
             filtbackproj,

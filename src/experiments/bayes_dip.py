@@ -80,11 +80,22 @@ def coordinator(cfg : DictConfig) -> None:
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
         if cfg.name in ['mnist', 'kmnist']:  
-            recon, _ = reconstructor.reconstruct(
-                observation, fbp=filtbackproj, ground_truth=example_image)
-            torch.save(reconstructor.model.state_dict(),
-                    './dip_model_{}.pt'.format(i))
+            if cfg.load_dip_models_from_path is not None:
+                path = os.path.join(cfg.load_dip_models_from_path, 'dip_model_{}.pt'.format(i))
+                print('loading model for {} reconstruction from {}'.format(cfg.name, path))
+                reconstructor.model.load_state_dict(torch.load(path, map_location=reconstructor.device))
+                with torch.no_grad():
+                    reconstructor.model.eval()
+                    recon, _ = reconstructor.model.forward(filtbackproj.to(reconstructor.device))
+                recon = recon[0, 0].cpu().numpy()
+            else:
+                recon, _ = reconstructor.reconstruct(
+                    observation, fbp=filtbackproj, ground_truth=example_image)
+                torch.save(reconstructor.model.state_dict(),
+                        './dip_model_{}.pt'.format(i))
         elif cfg.name == 'walnut':
+            if cfg.load_dip_models_from_path is not None:
+                raise NotImplementedError('model for walnut reconstruction cannot be loaded from a previous run, use net.finetuned_params_path instead')
             path = os.path.join(get_original_cwd(), reconstructor.cfg.finetuned_params_path 
                 if reconstructor.cfg.finetuned_params_path.endswith('.pt') else reconstructor.cfg.finetuned_params_path + '.pt')
             reconstructor.model.load_state_dict(torch.load(path, map_location=reconstructor.device))
