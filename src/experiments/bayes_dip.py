@@ -178,7 +178,7 @@ def coordinator(cfg : DictConfig) -> None:
             trafo = trafos[0]
             if cfg.use_double:
                 trafo = trafo.to(torch.float64)
-            trafo_T_trafo = trafo.to(reconstructor.store_device).T @ trafo.to(reconstructor.store_device)
+            trafo_T_trafo = trafo.to(reconstructor.device).T @ trafo.to(reconstructor.device)
             U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
             lik_hess_inv_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
 
@@ -189,7 +189,7 @@ def coordinator(cfg : DictConfig) -> None:
                 eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
-                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat)
+                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat),
                 noise_x_correction_term=lik_hess_inv_diag_meam)
 
         torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
