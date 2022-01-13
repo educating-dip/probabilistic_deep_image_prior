@@ -17,13 +17,13 @@ from priors_marglik import BayesianizeModel
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
         get_predictive_cov_image_block, predictive_image_block_log_prob,
-        get_image_block_masks)
+        get_image_block_masks, get_prior_cov_obs_mat)
 
 ### Compute a single block
-### (specified via `density.compute_single_predictive_cov_block.block_idx`) of
+### (specified via `density.assemble_cov_obs_mat.block_idx`) of
 ### the predictive covariance matrix based on the model and mrglik-optimization
 ### results of a previous run (specified via
-### `density.compute_single_predictive_cov_block.load_path`).
+### `density.assemble_cov_obs_mat.load_path`).
 ### This allows to parallelize with multiple jobs; after all jobs are finished,
 ### the approx. predictive log prob can be evaluated with
 ### ``merge_single_block_predictive_image_log_probs.py``.
@@ -50,10 +50,9 @@ def coordinator(cfg : DictConfig) -> None:
     else:
         raise NotImplementedError
 
-    assert cfg.density.compute_single_predictive_cov_block.load_path is not None, "no previous run path specified (density.compute_single_predictive_cov_block.load_path)"
-    assert cfg.density.compute_single_predictive_cov_block.block_idx is not None, "no block index specified (density.compute_single_predictive_cov_block.block_idx)"
+    assert cfg.density.assemble_cov_obs_mat.load_path is not None, "no previous run path specified (density.assemble_cov_obs_mat.load_path)"
 
-    load_path = cfg.density.compute_single_predictive_cov_block.load_path
+    load_path = cfg.density.assemble_cov_obs_mat.load_path
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if i < cfg.get('skip_first_images', 0):
@@ -151,54 +150,11 @@ def coordinator(cfg : DictConfig) -> None:
                 load_path, 'log_noise_model_variance_obs_{}.pt'.format(i)),
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
 
-        cov_obs_mat_load_path = cfg.density.compute_single_predictive_cov_block.get('cov_obs_mat_load_path', None)
-        if cov_obs_mat_load_path is None:
-            cov_obs_mat_load_path = load_path
-        cov_obs_mat = torch.load(os.path.join(cov_obs_mat_load_path, 'cov_obs_mat_{}.pt'.format(i)), map_location=reconstructor.device)['cov_obs_mat']
-        cov_obs_mat = cov_obs_mat.to(torch.float64 if cfg.use_double else torch.float32)
+        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
+                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
+                cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
 
-        cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
-        cov_obs_mat_diag_mean = cov_obs_mat.diag().mean().detach().cpu().numpy()
-        if cfg.density.cov_obs_mat_eps == 'auto':
-            suceed = False
-            cnt = 0
-            diag_increment = 1e-6 * cov_obs_mat_diag_mean
-            while not suceed:
-                try:
-                    torch.linalg.cholesky(cov_obs_mat)
-                    suceed = True
-                except:
-                    cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += diag_increment
-                    cnt += 1
-                    assert cnt < 1000 # safety
-            total_diag_increment = diag_increment * cnt
-        else:
-            total_diag_increment = cfg.density.cov_obs_mat_eps * cov_obs_mat.diag().mean().detach().cpu().numpy()
-            cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += total_diag_increment
-        print('increased diagonal of Kyy by {} == {} * Kyy.diag().mean()'.format(total_diag_increment, total_diag_increment / cov_obs_mat_diag_mean))
-
-        # compute predictive image log prob for block
-        block_idx = cfg.density.compute_single_predictive_cov_block.block_idx
-
-        block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
-        mask = block_masks[block_idx]
-
-        predictive_cov_image_block = get_predictive_cov_image_block(
-                mask, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj.to(reconstructor.device),
-                bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size,
-                eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
-
-        block_log_prob = predictive_image_block_log_prob(
-                recon.to(reconstructor.device).flatten()[mask],
-                example_image.to(reconstructor.device).flatten()[mask],
-                predictive_cov_image_block)
-
-        torch.save({'mask': mask, 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag()},
-            './predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))
-
-        print('block', block_idx, 'log prob ', block_log_prob / example_image.flatten()[mask].numel())
-
+        torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
 
 if __name__ == '__main__':
     coordinator()
