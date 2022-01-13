@@ -137,7 +137,7 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
     return torch.linalg.cholesky(predictive_cov_image_block) if return_cholesky else predictive_cov_image_block
 
 def predictive_image_log_prob(
-        recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None):
+        recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None, noise_x_correction_term=None):
 
 
     block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size, flatten=True)
@@ -151,6 +151,8 @@ def predictive_image_log_prob(
     for mask in tqdm(block_masks, desc='image_block_log_probs'):
         predictive_cov_image_block = get_predictive_cov_image_block(
                 mask, cov_obs_mat_chol, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=eps, cov_image_eps=cov_image_eps, return_cholesky=False)
+        if noise_x_correction_term is not None: 
+            predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += noise_x_correction_term
 
         image_block_diags.append(predictive_cov_image_block.diag())
         image_block_log_probs.append(predictive_image_block_log_prob(recon.flatten()[mask], ground_truth.flatten()[mask], predictive_cov_image_block))
