@@ -1,3 +1,4 @@
+from functools import lru_cache
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -5,6 +6,7 @@ from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul
 from .batch_jac import vec_jac_mul_batch
 from .jvp import fwAD_JvP_batch_ensemble
 from .prior_cov_obs import get_prior_cov_obs_mat
+from .utils import bisect_left  # for python >= 3.10 one can use instead: from bisect import bisect_left
 
 def predictive_cov_image_block_norm(v, predictive_cov_image_block):
     v_out = torch.linalg.solve(predictive_cov_image_block, v.T).T
@@ -120,39 +122,59 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
             rows_batch = rows_batch[:block_numel%vec_batch_size]
         rows.append(rows_batch)
     predictive_cov_image_block = torch.cat(rows, dim=0)
-    
-    suceed = False
-    cnt = 0
+
+    predictive_cov_image_block = 0.5 * (predictive_cov_image_block + predictive_cov_image_block.T)  # in case of numerical issues leading to asymmetry
+
     if eps is not None:
         predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += eps
-    while not suceed:
-        try:
-            assert torch.all(predictive_cov_image_block.diag() > 0.)
-            suceed = True
-        except:
-            predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += eps
-            cnt += 1
-            assert cnt < 1000 # safety 
-    
+
     return torch.linalg.cholesky(predictive_cov_image_block) if return_cholesky else predictive_cov_image_block
 
+def stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode, eps):
+    block_diag_mean = predictive_cov_image_block.diag().mean().detach().cpu().numpy()
+    if eps_mode == 'abs':
+        block_eps = eps or 0.
+    elif eps_mode == 'rel':
+        block_eps = (eps or 0.) * block_diag_mean
+    elif eps_mode == 'auto':
+        @lru_cache(maxsize=None)
+        def block_pos_logdet(eps_value):
+            return (predictive_cov_image_block.diag().min() + eps_value > 0. and
+                    torch.slogdet(predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))[0] > 0.)
+        eps_to_search = [0.] + (list(np.logspace(-6, 0, 1000) * eps * block_diag_mean) if eps else None)
+        i_eps = bisect_left(eps_to_search, True, key=block_pos_logdet)
+        assert i_eps < len(eps_to_search), 'failed to make determinant of Kf|y block positive, max eps is {} == {} * Kf|y.diag().mean()'.format(eps_to_search[-1], eps_to_search[-1] / block_diag_mean)
+        block_eps = eps_to_search[i_eps]
+    elif eps_mode is None or eps_mode.lower() == 'none':
+        block_eps = 0.
+    else:
+        raise NotImplementedError
+    if block_eps != 0.:
+        predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += block_eps
+        print('increased diagonal of Kf|y block by {} == {} * Kf|y.diag().mean()'.format(block_eps, block_eps / block_diag_mean))
+
 def predictive_image_log_prob(
-        recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None, noise_x_correction_term=None):
+        recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps_mode, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None, noise_x_correction_term=None):
 
 
     block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size, flatten=True)
 
     if cov_obs_mat_chol is None:
         cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True)
+        cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
         cov_obs_mat_chol = torch.linalg.cholesky(cov_obs_mat)
 
     image_block_diags = []
     image_block_log_probs = []
     for mask in tqdm(block_masks, desc='image_block_log_probs'):
         predictive_cov_image_block = get_predictive_cov_image_block(
-                mask, cov_obs_mat_chol, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=eps, cov_image_eps=cov_image_eps, return_cholesky=False)
+                mask, cov_obs_mat_chol, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size,
+                eps=None,  # handle later
+                cov_image_eps=cov_image_eps, return_cholesky=False)
         if noise_x_correction_term is not None: 
             predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += noise_x_correction_term
+
+        stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=eps_mode, eps=eps)
 
         image_block_diags.append(predictive_cov_image_block.diag())
         image_block_log_probs.append(predictive_image_block_log_prob(recon.flatten()[mask], ground_truth.flatten()[mask], predictive_cov_image_block))

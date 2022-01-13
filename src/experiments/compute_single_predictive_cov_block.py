@@ -17,7 +17,8 @@ from priors_marglik import BayesianizeModel
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
         get_predictive_cov_image_block, predictive_image_block_log_prob,
-        get_image_block_masks)
+        get_image_block_masks, stabilize_predictive_cov_image_block,
+        stabilize_prior_cov_obs_mat)
 
 ### Compute a single block
 ### (specified via `density.compute_single_predictive_cov_block.block_idx`) of
@@ -158,24 +159,7 @@ def coordinator(cfg : DictConfig) -> None:
         cov_obs_mat = cov_obs_mat.to(torch.float64 if cfg.use_double else torch.float32)
 
         cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
-        cov_obs_mat_diag_mean = cov_obs_mat.diag().mean().detach().cpu().numpy()
-        if cfg.density.cov_obs_mat_eps == 'auto':
-            suceed = False
-            cnt = 0
-            diag_increment = 1e-6 * cov_obs_mat_diag_mean
-            while not suceed:
-                try:
-                    torch.linalg.cholesky(cov_obs_mat)
-                    suceed = True
-                except:
-                    cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += diag_increment
-                    cnt += 1
-                    assert cnt < 1000 # safety
-            total_diag_increment = diag_increment * cnt
-        else:
-            total_diag_increment = cfg.density.cov_obs_mat_eps * cov_obs_mat.diag().mean().detach().cpu().numpy()
-            cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += total_diag_increment
-        print('increased diagonal of Kyy by {} == {} * Kyy.diag().mean()'.format(total_diag_increment, total_diag_increment / cov_obs_mat_diag_mean))
+        stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode=cfg.density.cov_obs_mat_eps_mode, eps=cfg.density.cov_obs_mat_eps)
 
         # compute predictive image log prob for block
         block_idx = cfg.density.compute_single_predictive_cov_block.block_idx
@@ -187,7 +171,10 @@ def coordinator(cfg : DictConfig) -> None:
                 mask, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj.to(reconstructor.device),
                 bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size,
-                eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
+                eps=None, # handle later
+                cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
+
+        stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=cfg.density.eps_mode, eps=cfg.density.eps)
 
         block_log_prob = predictive_image_block_log_prob(
                 recon.to(reconstructor.device).flatten()[mask],

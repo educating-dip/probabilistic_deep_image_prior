@@ -19,7 +19,8 @@ from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        optim_marginal_lik_low_rank, predictive_image_log_prob, get_prior_cov_obs_mat)
+        optim_marginal_lik_low_rank, predictive_image_log_prob, get_prior_cov_obs_mat,
+        stabilize_prior_cov_obs_mat)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -166,7 +167,8 @@ def coordinator(cfg : DictConfig) -> None:
 
         torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
 
-        cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += 0.01 * cov_obs_mat.diag().mean()
+        cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
+        stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode=cfg.density.cov_obs_mat_eps_mode, eps=cfg.density.cov_obs_mat_eps)
 
         lik_hess_inv_diag_meam = None
         if cfg.name in ['mnist', 'kmnist']:
@@ -186,7 +188,7 @@ def coordinator(cfg : DictConfig) -> None:
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
+                eps_mode=cfg.density.eps_mode, eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
                 cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat),

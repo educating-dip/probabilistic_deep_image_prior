@@ -1,6 +1,8 @@
+from functools import lru_cache
 from .batch_jac import vec_op_jac_mul_batch
 from .jvp import fwAD_JvP_batch_ensemble, finite_diff_JvP_batch_ensemble
 from .vec_weight_prior_mul_closure import vec_weight_prior_cov_mul, vec_weight_prior_cov_mul_base
+from .utils import bisect_left  # for python >= 3.10 one can use instead: from bisect import bisect_left
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -111,6 +113,32 @@ def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hoo
         rows.append(rows_batch.cpu())
     diag_cov_obs_mat = torch.cat(rows, dim=0)
     return diag_cov_obs_mat.squeeze(dim=-1).to(filtbackproj.device)
+
+def stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode, eps):
+    cov_obs_mat_diag_mean = cov_obs_mat.diag().mean().detach().cpu().numpy()
+    if eps_mode == 'abs':
+        cov_obs_mat_eps = eps or 0.
+    elif eps_mode == 'rel':
+        cov_obs_mat_eps = (eps or 0.) * cov_obs_mat.diag().mean().detach().cpu().numpy()
+    elif eps_mode == 'auto':
+        @lru_cache(maxsize=None)
+        def cov_obs_mat_cholesky_decomposable(eps_value):
+            try:
+                _ = torch.linalg.cholesky(cov_obs_mat + eps_value * torch.eye(cov_obs_mat.shape[0], device=cov_obs_mat.device))
+            except RuntimeError:
+                return False
+            return True
+        eps_to_search = [0.] + (list(np.logspace(-6, 0, 1000) * eps * cov_obs_mat_diag_mean) if eps else [])
+        i_eps = bisect_left(eps_to_search, True, key=cov_obs_mat_cholesky_decomposable)
+        assert i_eps < len(eps_to_search), 'failed to make Kyy cholesky decomposable, max eps is {} == {} * Kyy.diag().mean()'.format(eps_to_search[-1], eps_to_search[-1] / cov_obs_mat_diag_mean)
+        cov_obs_mat_eps = eps_to_search[i_eps]
+    elif eps_mode is None or eps_mode.lower() == 'none':
+        cov_obs_mat_eps = 0.
+    else:
+        raise NotImplementedError
+    if cov_obs_mat_eps != 0.:
+        cov_obs_mat[np.diag_indices(cov_obs_mat.shape[0])] += cov_obs_mat_eps
+        print('increased diagonal of Kyy by {} == {} * Kyy.diag().mean()'.format(cov_obs_mat_eps, cov_obs_mat_eps / cov_obs_mat_diag_mean))
 
 # # build diag Kyy
 # def get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, vec_batch_size, replace_by_identity=False):

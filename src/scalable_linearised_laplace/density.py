@@ -22,7 +22,7 @@ def get_exact_predictive_cov_image_mat(ray_trafos, bayesianized_model, jac, log_
                 cov_obs_mat,
                 ray_trafo_mat @ cov_image_mat.T))
     if eps is not None:
-        cov_image_mat[np.diag_indices(cov_image_mat.shape[0])] += eps
+        predictive_cov_image_mat[np.diag_indices(cov_image_mat.shape[0])] += eps
     return predictive_cov_image_mat
 
 # def compute_exact_predictive_cov_image_log_det(

@@ -21,6 +21,9 @@ from scalable_linearised_laplace import (
         get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, compute_approx_log_det_grad,
         get_predictive_cov_image_block, get_exact_predictive_cov_image_mat, predictive_image_log_prob)
 
+# may require a good network reco and/or high precision computation
+# TODO add noise term for x
+
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
@@ -60,10 +63,19 @@ def coordinator(cfg : DictConfig) -> None:
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
         if cfg.name in ['mnist', 'kmnist']:  
-            recon, _ = reconstructor.reconstruct(
-                observation, fbp=filtbackproj, ground_truth=example_image)
-            torch.save(reconstructor.model.state_dict(),
-                    './dip_model_{}.pt'.format(i))
+            if cfg.load_dip_models_from_path is not None:
+                path = os.path.join(cfg.load_dip_models_from_path, 'dip_model_{}.pt'.format(i))
+                print('loading model for {} reconstruction from {}'.format(cfg.name, path))
+                reconstructor.model.load_state_dict(torch.load(path, map_location=reconstructor.device))
+                with torch.no_grad():
+                    reconstructor.model.eval()
+                    recon, _ = reconstructor.model.forward(filtbackproj.to(reconstructor.device))
+                recon = recon[0, 0].cpu().numpy()
+            else:
+                recon, _ = reconstructor.reconstruct(
+                    observation, fbp=filtbackproj, ground_truth=example_image)
+                torch.save(reconstructor.model.state_dict(),
+                        './dip_model_{}.pt'.format(i))
         elif cfg.name == 'walnut':
             path = os.path.join(get_original_cwd(), reconstructor.cfg.finetuned_params_path 
                 if reconstructor.cfg.finetuned_params_path.endswith('.pt') else reconstructor.cfg.finetuned_params_path + '.pt')
@@ -150,22 +162,18 @@ def coordinator(cfg : DictConfig) -> None:
 
         print('diff (predictive_cov_image_block-predictive_cov_image_exact).diag()', torch.sum(torch.abs(predictive_cov_image_block.diag() - predictive_cov_image_exact.diag())))
 
+        block_size_list = [cfg.size, 14, 7, 4, 2]
 
-        approx_log_prob, _, _, _ = predictive_image_log_prob(
-                recon.to(reconstructor.device), example_image.to(reconstructor.device),
-                ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
-                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                eps=1e-6, cov_image_eps=1e-6,
-                block_size=cfg.density.block_size_for_approx,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size)
-
-        approx_log_prob_7, _, _, _ = predictive_image_log_prob( 
-                recon.to(reconstructor.device), example_image.to(reconstructor.device),
-                ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
-                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                eps=1e-6, cov_image_eps=1e-6,
-                block_size=7,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+        approx_log_prob_list = []
+        for block_size in block_size_list:
+            approx_log_prob, _, _, _ = predictive_image_log_prob(
+                    recon.to(reconstructor.device), example_image.to(reconstructor.device),
+                    ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
+                    fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
+                    eps_mode='auto', eps=1e-3, cov_image_eps=1e-6,
+                    block_size=block_size,
+                    vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+            approx_log_prob_list.append(approx_log_prob)
 
         dist_block_priors = torch.distributions.multivariate_normal.MultivariateNormal(
                     loc=recon.to(reconstructor.device).flatten(),
@@ -179,10 +187,10 @@ def coordinator(cfg : DictConfig) -> None:
                 )
         log_prob = dist.log_prob(example_image.to(reconstructor.device).flatten())
 
-        print('approx', approx_log_prob)
-        print('approx block size 7', approx_log_prob_7)
-        print('exact using block_priors', log_prob_block_priors)
-        print('exact', log_prob)
+        for block_size, approx_log_prob in zip(block_size_list, approx_log_prob_list):
+            print('approx using block size {}:'.format(block_size), approx_log_prob)
+        print('exact using block_priors:', log_prob_block_priors)
+        print('exact:', log_prob)
 
     print('max GPU memory used:', torch.cuda.max_memory_allocated())
 
