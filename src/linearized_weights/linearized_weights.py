@@ -62,12 +62,18 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
     filtbackproj = filtbackproj.to(reconstructor.device)
     observation = observation.to(reconstructor.device)
     ground_truth = ground_truth.to(reconstructor.device)
+    recon_no_activation = reconstructor.model.forward(filtbackproj)[1].detach()
 
     all_modules_under_prior = bayesianised_model.get_all_modules_under_prior()
     map_weights = get_weight_block_vec(all_modules_under_prior).detach()
     ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)
     ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
-    lin_w_fd = nn.Parameter(torch.zeros_like(map_weights).clone()).to(reconstructor.device)
+
+    if cfg.lin_params.simplified_eqn:
+        lin_w_fd = nn.Parameter(torch.zeros_like(map_weights).clone()).to(reconstructor.device)
+    else:
+        lin_w_fd = nn.Parameter(map_weights.clone()).to(reconstructor.device)
+    
     optimizer = torch.optim.Adam([lin_w_fd], **{'lr': cfg.lin_params.lr}, weight_decay=0)
     
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
@@ -86,14 +92,22 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
     with tqdm(range(cfg.lin_params.iterations), miniters=cfg.lin_params.iterations//1000) as pbar:
         for i in pbar:
 
-            if cfg.mrglik.impl.use_fwAD_for_jvp:
-                lin_pred = fwAD_JvP(filtbackproj, fwAD_model, lin_w_fd, fwAD_modules, pre_activation=True, saturation_safety=False).detach()
+            if cfg.lin_params.simplified_eqn:
+                fd_vector = lin_w_fd
             else:
-                lin_pred = finite_diff_JvP(filtbackproj, reconstructor.model, lin_w_fd, all_modules_under_prior, pre_activation=True, saturation_safety=False).detach()
-             
+                fd_vector = lin_w_fd - map_weights
+
+            if cfg.mrglik.impl.use_fwAD_for_jvp:
+                lin_pred = fwAD_JvP(filtbackproj, fwAD_model, fd_vector, fwAD_modules, pre_activation=True, saturation_safety=False).detach()
+            else:
+                lin_pred = finite_diff_JvP(filtbackproj, reconstructor.model, fd_vector, all_modules_under_prior, pre_activation=True, saturation_safety=False).detach()
+            
+            if not cfg.lin_params.simplified_eqn:
+                lin_pred = lin_pred + recon_no_activation
+
             if cfg.net.arch.use_sigmoid:
                 lin_pred = lin_pred.sigmoid()
-
+            
             loss = torch.nn.functional.mse_loss(ray_trafo_module(lin_pred), observation.to(reconstructor.device)) \
                 + cfg.net.optim.gamma * tv_loss(lin_pred)
 
