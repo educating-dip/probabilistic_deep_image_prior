@@ -25,12 +25,13 @@ def sample_from_posterior(ray_trafos, observation, filtbackproj, cov_obs_mat, ho
     return s_images
 
 
-def approx_density_from_samples(recon, example_image, mc_sample_images):
+def approx_density_from_samples(recon, example_image, mc_sample_images, noise_x_correction_term=None):
 
     assert example_image.shape[1:] == mc_sample_images.shape[1:]
     
     mc_samples = mc_sample_images.shape[0]
-    std = ( torch.var(mc_sample_images.view(mc_samples, -1), dim=0 ).clamp_(min = (1 / 255) **2 / 12 ) ) **.5
-    dist = torch.distributions.normal.Normal(recon.flatten(), std)
+    assert noise_x_correction_term is not None
 
+    std = ( torch.var(mc_sample_images.view(mc_samples, -1), dim=0) + noise_x_correction_term) **.5
+    dist = torch.distributions.normal.Normal(recon.flatten(), std)
     return dist.log_prob(example_image.flatten()).sum()

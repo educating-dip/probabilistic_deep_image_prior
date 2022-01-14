@@ -55,12 +55,14 @@ class DeepImagePriorReconstructor():
             current_time + '_' + socket.gethostname() + comment)
         self.writer = tensorboardX.SummaryWriter(logdir=logdir)
 
-    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None):
+    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True):
 
         if self.cfg.torch_manual_seed:
             torch.random.manual_seed(self.cfg.torch_manual_seed)
 
-        self.init_model()
+        if use_init_model: 
+            self.init_model()
+
         if self.cfg.load_pretrain_model:
             path = os.path.join(
                 get_original_cwd(),

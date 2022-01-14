@@ -1,8 +1,9 @@
 import torch
 import numpy as np
 from skimage.metrics import structural_similarity
-from torch.nn import DataParallel
-from collections.abc import Iterable
+from torch.nn.modules.dropout import _DropoutNd
+import torch.nn.functional as F
+import torch.nn as nn
 
 def diag_gaussian_log_prob(observation, proj_recon, sigma):
 
@@ -47,3 +48,30 @@ def normalize(x, inplace=False):
         x = x - x.min()
         x = x / x.max()
     return x
+
+class mc_dropout2d(_DropoutNd):
+    def forward(self, input):
+        return F.dropout2d(input, self.p, True, self.inplace)
+
+class conv2d_dropout(nn.Module):
+    def __init__(self, sub_module, p):
+        super().__init__()
+        self.layer = sub_module
+        self.dropout = mc_dropout2d(p=p)
+    def forward(self, x): 
+        x = self.layer(x)
+        return self.dropout(x)
+
+def bayesianize_architecture(model, p=0.05):
+    for _, module in model.named_modules():
+        if isinstance(module, torch.nn.Sequential):
+            for name_sub_module, sub_module in module.named_children(): 
+                if isinstance(sub_module, torch.nn.Conv2d):
+                    if sub_module.kernel_size == (3, 3):
+                        setattr(module, name_sub_module, conv2d_dropout(sub_module, p))
+
+def sample_from_bayesianized_model(model, filtbackproj, mc_samples):
+    sampled_recons = []
+    for _ in range(mc_samples):
+        sampled_recons.append(model.forward(filtbackproj)[0].detach())
+    return torch.cat(sampled_recons, dim=0)
