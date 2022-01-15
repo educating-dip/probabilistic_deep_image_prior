@@ -13,7 +13,7 @@ tl.set_backend('pytorch')
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM, bayesianize_architecture, sample_from_bayesianized_model
 from dataset import extract_trafos_as_matrices
-from scalable_linearised_laplace import approx_density_from_samples
+from scalable_linearised_laplace import approx_density_from_samples, approx_kernel_density
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -65,15 +65,15 @@ def coordinator(cfg : DictConfig) -> None:
         trafo = trafos[0].to(reconstructor.device)
         trafo_T_trafo = trafo.T @ trafo
         U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
-        lik_hess_inv_no_predcp_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T).diag().mean() # constructing noise in x correction term
+        lik_hess_inv_no_predcp_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T).diag().mean() # constructing noise in x correction term, sigma_y^2 = 1 (unit-var.)
         
-        num_samples = 1000
+        num_samples = 10000
         bayesianize_architecture(reconstructor.model, p=0.05)
         recon, _ = reconstructor.reconstruct(
                 observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device), use_init_model=False)
         sample_recon = sample_from_bayesianized_model(reconstructor.model, filtbackproj.to(reconstructor.device), mc_samples=num_samples)
         mean = sample_recon.view(num_samples, -1).mean(dim=0)
-        log_prob = approx_density_from_samples(mean, example_image.to(reconstructor.device), sample_recon, noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam) / example_image.numel()
+        log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam.cpu()) / example_image.numel()
 
         torch.save(reconstructor.model.state_dict(),
                 './dip_model_{}.pt'.format(i))
@@ -86,7 +86,7 @@ def coordinator(cfg : DictConfig) -> None:
                 'filtbackproj': filtbackproj.cpu().numpy(), 
                 'image': example_image.cpu().numpy(), 
                 'recon': mean.cpu().numpy(),
-                'test_log_likelihood': log_prob.cpu().numpy()
+                'test_log_likelihood': log_prob_kernel_density.cpu().numpy()
                 }
 
         np.savez('recon_info_{}'.format(i), **data)

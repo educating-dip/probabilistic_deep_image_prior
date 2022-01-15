@@ -1,5 +1,6 @@
 import torch
 from math import ceil 
+from sklearn.neighbors import KernelDensity
 from .jvp import fwAD_JvP_batch_ensemble
 from .mc_pred_cp_loss import _sample_from_prior_over_weights
 from .approx_density import cov_image_mul
@@ -35,3 +36,12 @@ def approx_density_from_samples(recon, example_image, mc_sample_images, noise_x_
     std = ( torch.var(mc_sample_images.view(mc_samples, -1), dim=0) + noise_x_correction_term) **.5
     dist = torch.distributions.normal.Normal(recon.flatten(), std)
     return dist.log_prob(example_image.flatten()).sum()
+
+
+def approx_kernel_density(example_image, mc_sample_images, bw=0.1, noise_x_correction_term=None):
+
+    if noise_x_correction_term is not None:
+        mc_sample_images = mc_sample_images + torch.randn_like(mc_sample_images) * noise_x_correction_term **.5
+
+    kde = KernelDensity(kernel='gaussian', bandwidth=bw).fit(mc_sample_images.view(mc_sample_images.shape[0], -1).numpy())
+    return kde.score_samples(example_image.flatten().numpy()[None, :])
