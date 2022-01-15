@@ -26,6 +26,11 @@ def set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_
     if return_loss:
         raise NotImplementedError
 
+def clamp_params(params, min=-4.5):
+
+    for param in params:
+        param.data.clamp_(min=min)
+
 def optim_marginal_lik_low_rank(
     cfg,
     observation,
@@ -67,6 +72,9 @@ def optim_marginal_lik_low_rank(
 
     if use_jacobi_vector:
         jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=False).detach()
+        if jacobi_vector.min() < 1:
+            print('clamping jacobi_vector to min value 1')
+            jacobi_vector = jacobi_vector.clamp(min=1)
     else:
         jacobi_vector = None
 
@@ -97,6 +105,17 @@ def optim_marginal_lik_low_rank(
 
             loss.backward()
             optimizer.step()
+
+            clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
+            clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
+
+            if (i-1) % 200 == 0:
+                torch.save(optimizer.state_dict(),
+                    './optimizer_{}_iter_{}.pt'.format(comment, i))
+                torch.save(bayesianized_model.state_dict(),
+                    './bayesianized_model_{}_iter_{}.pt'.format(comment, i))
+                torch.save({'log_noise_model_variance_obs': log_noise_model_variance_obs},
+                    './log_noise_model_variance_obs_{}_iter_{}.pt'.format(comment, i))
 
             for k, gp_log_lengthscale in enumerate(bayesianized_model.gp_log_lengthscales):
                 writer.add_scalar('gp_lengthscale_{}'.format(k),
