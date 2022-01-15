@@ -12,6 +12,7 @@ from dataset.utils import (
         load_testset_walnut)
 from dataset.mnist import simulate
 import torch
+import scipy
 from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
@@ -170,7 +171,7 @@ def coordinator(cfg : DictConfig) -> None:
         cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
         stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode=cfg.density.cov_obs_mat_eps_mode, eps=cfg.density.cov_obs_mat_eps)
 
-        lik_hess_inv_diag_meam = None
+        lik_hess_inv_diag_mean = None
         if cfg.name in ['mnist', 'kmnist']:
             from dataset import extract_trafos_as_matrices
             import tensorly as tl
@@ -180,9 +181,22 @@ def coordinator(cfg : DictConfig) -> None:
             trafo = trafos[0]
             if cfg.use_double:
                 trafo = trafo.to(torch.float64)
-            trafo_T_trafo = trafo.to(reconstructor.device).T @ trafo.to(reconstructor.device)
+            trafo = trafo.to(reconstructor.device)
+            trafo_T_trafo = trafo.T @ trafo
             U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
-            lik_hess_inv_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
+            lik_hess_inv_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
+        elif cfg.name == 'walnut':
+            # pseudo-inverse computation
+            trafo = ray_trafos['ray_trafo_mat'].reshape(-1, np.prod(ray_trafos['space'].shape))
+            if cfg.use_double:
+                trafo = trafo.astype(np.float64)
+            U_trafo, S_trafo, Vh_trafo = scipy.sparse.linalg.svds(trafo, k=100)
+            # (Vh.T S U.T U S Vh)^-1 == (Vh.T S^2 Vh)^-1 == Vh.T S^-2 Vh
+            S_inv_Vh_trafo = scipy.sparse.diags(1/S_trafo) @ Vh_trafo
+            # trafo_T_trafo_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
+            trafo_T_trafo_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
+            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_diag) * np.exp(log_noise_model_variance_obs.item())
+        print('noise_x_correction_term:', lik_hess_inv_diag_mean)
 
         approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
@@ -192,7 +206,7 @@ def coordinator(cfg : DictConfig) -> None:
                 block_size=cfg.density.block_size_for_approx,
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
                 cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat),
-                noise_x_correction_term=lik_hess_inv_diag_meam)
+                noise_x_correction_term=lik_hess_inv_diag_mean)
 
         torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
             './predictive_image_log_prob_{}.pt'.format(i))

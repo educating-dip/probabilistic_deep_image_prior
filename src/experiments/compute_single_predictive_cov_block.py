@@ -10,6 +10,7 @@ from dataset.utils import (
         load_testset_walnut)
 from dataset.mnist import simulate
 import torch
+import scipy
 from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
@@ -173,6 +174,36 @@ def coordinator(cfg : DictConfig) -> None:
                 vec_batch_size=cfg.mrglik.impl.vec_batch_size,
                 eps=None, # handle later
                 cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
+
+        lik_hess_inv_diag_mean = None
+        if cfg.name in ['mnist', 'kmnist']:
+            from dataset import extract_trafos_as_matrices
+            import tensorly as tl
+            tl.set_backend('pytorch')
+            # pseudo-inverse computation
+            trafos = extract_trafos_as_matrices(ray_trafos)
+            trafo = trafos[0]
+            if cfg.use_double:
+                trafo = trafo.to(torch.float64)
+            trafo = trafo.to(reconstructor.device)
+            trafo_T_trafo = trafo.T @ trafo
+            U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
+            lik_hess_inv_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
+        elif cfg.name == 'walnut':
+            # pseudo-inverse computation
+            trafo = ray_trafos['ray_trafo_mat'].reshape(-1, np.prod(ray_trafos['space'].shape))
+            if cfg.use_double:
+                trafo = trafo.astype(np.float64)
+            U_trafo, S_trafo, Vh_trafo = scipy.sparse.linalg.svds(trafo, k=100)
+            # (Vh.T S U.T U S Vh)^-1 == (Vh.T S^2 Vh)^-1 == Vh.T S^-2 Vh
+            S_inv_Vh_trafo = scipy.sparse.diags(1/S_trafo) @ Vh_trafo
+            # trafo_T_trafo_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
+            trafo_T_trafo_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
+            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_diag) * np.exp(log_noise_model_variance_obs.item())
+        print('noise_x_correction_term:', lik_hess_inv_diag_mean)
+
+        if lik_hess_inv_diag_mean is not None:
+            predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += lik_hess_inv_diag_mean
 
         stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=cfg.density.eps_mode, eps=cfg.density.eps)
 
