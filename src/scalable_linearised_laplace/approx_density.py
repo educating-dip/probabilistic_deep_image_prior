@@ -140,7 +140,7 @@ def stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode, e
         @lru_cache(maxsize=None)
         def block_pos_logdet(eps_value):
             return (predictive_cov_image_block.diag().min() + eps_value > 0. and
-                    torch.slogdet(predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))[0] > 0.)
+                    torch.linalg.eig(predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))[0].real.min() > 0.)
         eps_to_search = [0.] + (list(np.logspace(-6, 0, 1000) * eps * block_diag_mean) if eps else None)
         i_eps = bisect_left(eps_to_search, True, key=block_pos_logdet)
         assert i_eps < len(eps_to_search), 'failed to make determinant of Kf|y block positive, max eps is {} == {} * Kf|y.diag().mean()'.format(eps_to_search[-1], eps_to_search[-1] / block_diag_mean)
