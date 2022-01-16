@@ -17,7 +17,7 @@ from priors_marglik import BayesianizeModel
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
         get_predictive_cov_image_block, predictive_image_block_log_prob,
-        get_image_block_masks, get_prior_cov_obs_mat)
+        get_image_block_masks, get_prior_cov_obs_mat, clamp_params)
 
 ### Compute a single block
 ### (specified via `density.assemble_cov_obs_mat.block_idx`) of
@@ -149,6 +149,10 @@ def coordinator(cfg : DictConfig) -> None:
         log_noise_model_variance_obs = torch.load(os.path.join(
                 load_path, 'log_noise_model_variance_obs_{}.pt'.format(i)),
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
+
+        if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization
+            clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
+            clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
 
         cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
