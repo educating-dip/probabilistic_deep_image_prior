@@ -166,7 +166,7 @@ def coordinator(cfg : DictConfig) -> None:
 
         approx_log_prob_list = []
         for block_size in block_size_list:
-            approx_log_prob, _, _, _ = predictive_image_log_prob(
+            approx_log_prob, _, _, _, _ = predictive_image_log_prob(
                     recon.to(reconstructor.device), example_image.to(reconstructor.device),
                     ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                     fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,

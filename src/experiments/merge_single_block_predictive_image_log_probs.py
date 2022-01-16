@@ -26,7 +26,14 @@ from scalable_linearised_laplace import (
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
 
+    if cfg.use_double:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
+
+    ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'],
+                 'reco_space': ray_trafos['space'],
+                 }
 
     # data: observation, filtbackproj, example_image
     if cfg.name == 'mnist':
@@ -51,19 +58,30 @@ def coordinator(cfg : DictConfig) -> None:
         # merge predictive image log probs of single blocks in order to compute an approx. log prob of the full image
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
-        assert len(load_path_list) == len(block_masks), "number of single block paths in density.merge_single_block_predictive_image_log_probs.load_path_list ({}) does not match number of blocks ({})".format(len(load_path_list), len(block_masks))
+        load_paths_per_block = {}
+        for load_path in load_path_list:
+            # TODO assert cfg
+            for block_idx in range(len(block_masks)):
+                if os.path.isfile(os.path.join(load_path, 'predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))):
+                    assert block_idx not in load_paths_per_block
+                    load_paths_per_block[block_idx] = load_path
 
         block_diags = []
         block_log_probs = []
-        for block_idx, load_path_block in enumerate(load_path_list):
+        block_mask_inds = []
+        block_eps_values = []
+        for block_idx, mask in enumerate(block_masks):
+            load_path_block = load_paths_per_block[block_idx]
             predictive_image_log_prob_block_dict = torch.load(os.path.join(
                     load_path_block, 'predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i)), map_location=device)
             block_diags.append(predictive_image_log_prob_block_dict['block_diag'])
+            block_mask_inds.append(np.nonzero(mask)[0])
             block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'])
+            block_eps_values.append(predictive_image_log_prob_block_dict['block_eps'])
 
         approx_log_prob = torch.sum(torch.stack(block_log_probs))
 
-        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
+        torch.save({'approx_log_prob': approx_log_prob, 'block_mask_inds': block_mask_inds, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'block_eps_values': block_eps_values},
             './predictive_image_log_prob_{}.pt'.format(i))
 
         print('approx log prob ', approx_log_prob / np.prod(ray_trafos['space'].shape))

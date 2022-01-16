@@ -101,8 +101,12 @@ def get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, 
             rows_batch = rows_batch[:block_numel%vec_batch_size]
         rows.append(rows_batch)
     cov_image_mat_block = torch.cat(rows, dim=0)
+
+    cov_image_block = 0.5 * (cov_image_block + cov_image_block.T)  # in case of numerical issues leading to asymmetry
+
     if eps is not None:
         cov_image_mat_block[np.diag_indices(cov_image_mat_block.shape[0])] += eps
+
     return cov_image_mat_block
 
 # block of K_f|y
@@ -138,12 +142,15 @@ def stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode, e
         block_eps = (eps or 0.) * block_diag_mean
     elif eps_mode == 'auto':
         @lru_cache(maxsize=None)
-        def block_pos_logdet(eps_value):
-            return (predictive_cov_image_block.diag().min() + eps_value > 0. and
-                    torch.linalg.eig(predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))[0].real.min() > 0.)
+        def predictive_cov_image_block_pos_definite(eps_value):
+            try:
+                _ = torch.linalg.cholesky(predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))
+            except RuntimeError:
+                return False
+            return True
         eps_to_search = [0.] + (list(np.logspace(-6, 0, 1000) * eps * block_diag_mean) if eps else None)
-        i_eps = bisect_left(eps_to_search, True, key=block_pos_logdet)
-        assert i_eps < len(eps_to_search), 'failed to make determinant of Kf|y block positive, max eps is {} == {} * Kf|y.diag().mean()'.format(eps_to_search[-1], eps_to_search[-1] / block_diag_mean)
+        i_eps = bisect_left(eps_to_search, True, key=predictive_cov_image_block_pos_definite)
+        assert i_eps < len(eps_to_search), 'failed to make Kf|y block ({}x{}) cholesky decomposable, max eps is {} == {} * Kf|y.diag().mean()'.format(*predictive_cov_image_block.shape, eps_to_search[-1], eps_to_search[-1] / block_diag_mean)
         block_eps = eps_to_search[i_eps]
     elif eps_mode is None or eps_mode.lower() == 'none':
         block_eps = 0.
@@ -152,6 +159,7 @@ def stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode, e
     if block_eps != 0.:
         predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += block_eps
         print('increased diagonal of Kf|y block by {} == {} * Kf|y.diag().mean()'.format(block_eps, block_eps / block_diag_mean))
+    return block_eps
 
 def predictive_image_log_prob(
         recon, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps_mode, eps, cov_image_eps, block_size, vec_batch_size, cov_obs_mat_chol=None, noise_x_correction_term=None):
@@ -166,6 +174,7 @@ def predictive_image_log_prob(
 
     image_block_diags = []
     image_block_log_probs = []
+    block_eps_values = []
     for mask in tqdm(block_masks, desc='image_block_log_probs'):
         predictive_cov_image_block = get_predictive_cov_image_block(
                 mask, cov_obs_mat_chol, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size,
@@ -174,11 +183,12 @@ def predictive_image_log_prob(
         if noise_x_correction_term is not None: 
             predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += noise_x_correction_term
 
-        stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=eps_mode, eps=eps)
+        block_eps = stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=eps_mode, eps=eps)
+        block_eps_values.append(block_eps)
 
         image_block_diags.append(predictive_cov_image_block.diag())
         image_block_log_probs.append(predictive_image_block_log_prob(recon.flatten()[mask], ground_truth.flatten()[mask], predictive_cov_image_block))
 
     approx_image_log_prob = torch.sum(torch.stack(image_block_log_probs))
 
-    return approx_image_log_prob, block_masks, image_block_log_probs, image_block_diags
+    return approx_image_log_prob, block_masks, image_block_log_probs, image_block_diags, block_eps_values

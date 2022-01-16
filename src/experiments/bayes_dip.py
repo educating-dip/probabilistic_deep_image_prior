@@ -193,12 +193,12 @@ def coordinator(cfg : DictConfig) -> None:
             U_trafo, S_trafo, Vh_trafo = scipy.sparse.linalg.svds(trafo, k=100)
             # (Vh.T S U.T U S Vh)^-1 == (Vh.T S^2 Vh)^-1 == Vh.T S^-2 Vh
             S_inv_Vh_trafo = scipy.sparse.diags(1/S_trafo) @ Vh_trafo
-            # trafo_T_trafo_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
-            trafo_T_trafo_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
-            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_diag) * np.exp(log_noise_model_variance_obs.item())
+            # trafo_T_trafo_inv_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
+            trafo_T_trafo_inv_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
+            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_inv_diag) * np.exp(log_noise_model_variance_obs.item())
         print('noise_x_correction_term:', lik_hess_inv_diag_mean)
 
-        approx_log_prob, block_masks, block_log_probs, block_diags = predictive_image_log_prob(
+        approx_log_prob, block_masks, block_log_probs, block_diags, block_eps_values = predictive_image_log_prob(
                 recon.to(reconstructor.device), example_image.to(reconstructor.device),
                 ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
@@ -208,7 +208,9 @@ def coordinator(cfg : DictConfig) -> None:
                 cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat),
                 noise_x_correction_term=lik_hess_inv_diag_mean)
 
-        torch.save({'approx_log_prob': approx_log_prob, 'block_masks': block_masks, 'block_log_probs': block_log_probs, 'block_diags': block_diags},
+        block_mask_inds = [np.nonzero(mask)[0] for mask in block_masks]
+
+        torch.save({'approx_log_prob': approx_log_prob, 'block_mask_inds': block_mask_inds, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'block_eps_values': block_eps_values},
             './predictive_image_log_prob_{}.pt'.format(i))
         
         print('approx log prob ', approx_log_prob / example_image.numel())
