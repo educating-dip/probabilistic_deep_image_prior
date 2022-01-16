@@ -162,19 +162,6 @@ def coordinator(cfg : DictConfig) -> None:
         cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
         stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode=cfg.density.cov_obs_mat_eps_mode, eps=cfg.density.cov_obs_mat_eps)
 
-        # compute predictive image log prob for block
-        block_idx = cfg.density.compute_single_predictive_cov_block.block_idx
-
-        block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
-        mask = block_masks[block_idx]
-
-        predictive_cov_image_block = get_predictive_cov_image_block(
-                mask, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj.to(reconstructor.device),
-                bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size,
-                eps=None, # handle later
-                cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
-
         lik_hess_inv_diag_mean = None
         if cfg.name in ['mnist', 'kmnist']:
             from dataset import extract_trafos_as_matrices
@@ -202,21 +189,73 @@ def coordinator(cfg : DictConfig) -> None:
             lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_diag) * np.exp(log_noise_model_variance_obs.item())
         print('noise_x_correction_term:', lik_hess_inv_diag_mean)
 
-        if lik_hess_inv_diag_mean is not None:
-            predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += lik_hess_inv_diag_mean
+        # compute predictive image log prob for block
+        block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
-        stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=cfg.density.eps_mode, eps=cfg.density.eps)
+        block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx
+        try:
+            block_idx_list = list(block_idx_list)
+        except TypeError:
+            block_idx_list = [block_idx_list]
 
-        block_log_prob = predictive_image_block_log_prob(
-                recon.to(reconstructor.device).flatten()[mask],
-                example_image.to(reconstructor.device).flatten()[mask],
-                predictive_cov_image_block)
+        errors = []
+        for block_idx in block_idx_list:
+            print('starting with block', block_idx)
 
-        torch.save({'mask': mask, 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag()},
-            './predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))
+            mask = block_masks[block_idx]
 
-        print('block', block_idx, 'log prob ', block_log_prob / example_image.flatten()[mask].numel())
+            predictive_cov_image_block = get_predictive_cov_image_block(
+                    mask, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj.to(reconstructor.device),
+                    bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
+                    vec_batch_size=cfg.mrglik.impl.vec_batch_size,
+                    eps=None, # handle later
+                    cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
 
+            if not torch.all(torch.isfinite(predictive_cov_image_block)):
+                errors.append(block_idx)
+                print('skipping block due to nan or inf occurences')
+                continue
+
+            if lik_hess_inv_diag_mean is not None:
+                predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += lik_hess_inv_diag_mean
+
+            if cfg.density.do_eps_sweep:
+                eps_sweep_values = np.logspace(-7, -1, 13) * predictive_cov_image_block.diag().mean().item()
+                eps_sweep_block_log_probs = []
+                for eps_value in eps_sweep_values:
+                    try:
+                        block_log_prob_with_eps = predictive_image_block_log_prob(
+                                recon.to(reconstructor.device).flatten()[mask],
+                                example_image.to(reconstructor.device).flatten()[mask],
+                                predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))
+                    except:
+                        block_log_prob_with_eps = None
+                    eps_sweep_block_log_probs.append(block_log_prob_with_eps)
+
+            try:
+                block_eps = stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=cfg.density.eps_mode, eps=cfg.density.eps)
+            except AssertionError:
+                errors.append(block_idx)
+                print('skipping block due to failed stabilizing attempt')
+                continue
+
+            block_log_prob = predictive_image_block_log_prob(
+                    recon.to(reconstructor.device).flatten()[mask],
+                    example_image.to(reconstructor.device).flatten()[mask],
+                    predictive_cov_image_block)
+
+            predictive_image_log_prob_block_dict = {'mask_inds': np.nonzero(mask)[0], 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag(), 'block_eps': block_eps}
+            if cfg.density.compute_single_predictive_cov_block.save_full_block:
+                predictive_image_log_prob_block_dict['block'] = predictive_cov_image_block
+            if cfg.density.do_eps_sweep:
+                predictive_image_log_prob_block_dict['eps_sweep_values'] = eps_sweep_values
+                predictive_image_log_prob_block_dict['eps_sweep_block_log_probs'] = eps_sweep_block_log_probs
+
+            torch.save(predictive_image_log_prob_block_dict,
+                './predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))
+
+        if errors:
+            print('errors occured in the following blocks:', errors)
 
 if __name__ == '__main__':
     coordinator()

@@ -1,13 +1,15 @@
 block_size_for_approx: 100
 eps_mode: auto
-eps: 1e-3
-cov_image_eps: 1e-6
-cov_obs_mat_eps_mode: rel
+eps: 1e-2
+do_eps_sweep: True
+cov_image_eps: null
+cov_obs_mat_eps_mode: auto
 cov_obs_mat_eps: 1e-2
 compute_single_predictive_cov_block:
   load_path: null
   block_idx: null
   cov_obs_mat_load_path: null
+  save_full_block: False
 assemble_cov_obs_mat:
   load_path: null
 merge_single_block_predictive_image_log_probs:
