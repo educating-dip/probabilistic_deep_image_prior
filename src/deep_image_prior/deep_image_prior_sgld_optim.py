@@ -1,61 +1,60 @@
 import os
-import socket
-import datetime
 import torch
 import numpy as np
-import tensorboardX
-from torch.optim import Adam
+from math import ceil
 from torch.nn import MSELoss
 from hydra.utils import get_original_cwd
 from tqdm import tqdm
 from warnings import warn 
-from .network import UNet
 from .utils import tv_loss, PSNR, normalize
 from copy import deepcopy
+from .deep_image_prior import DeepImagePriorReconstructor
+from torch.optim.optimizer import Optimizer, required
 
-class DeepImagePriorReconstructor():
+class SGLD(Optimizer):
     """
-    CT reconstructor applying DIP with TV regularization (see [2]_).
-    The DIP was introduced in [1].
-    .. [1] V. Lempitsky, A. Vedaldi, and D. Ulyanov, 2018, "Deep Image Prior".
-           IEEE/CVF Conference on Computer Vision and Pattern Recognition.
-           https://doi.org/10.1109/CVPR.2018.00984
-    .. [2] D. Otero Baguer, J. Leuschner, M. Schmidt, 2020, "Computed
-           Tomography Reconstruction Using Deep Image Prior and Learned
-           Reconstruction Methods". Inverse Problems.
-           https://doi.org/10.1088/1361-6420/aba415
+    SGLD optimiser based on pytorch's SGD.
+    Note that the weight decay is specified in terms of the gaussian prior sigma.
     """
 
-    def __init__(self, ray_trafo_module, reco_space, cfg):
+    def __init__(self, params, lr=required, weight_decay=0, noisy_lr=1e-8):
 
-        self.reco_space = reco_space
-        self.cfg = cfg
-        self.device = torch.device(('cuda:0' if torch.cuda.is_available() else 'cpu'))
-        self.ray_trafo_module = ray_trafo_module.to(self.device)
-        self.init_model()
+        if lr is not required and lr < 0.0:
+            raise ValueError("Invalid learning rate: {}".format(lr))
 
-    def init_model(self):
+        defaults = dict(lr=lr, weight_decay=weight_decay, noisy_lr=noisy_lr)
 
-        input_depth = 1
-        output_depth = 1
-        self.model = UNet(
-            input_depth,
-            output_depth,
-            channels=self.cfg.arch.channels[:self.cfg.arch.scales],
-            skip_channels=self.cfg.arch.skip_channels[:self.cfg.arch.scales],
-            use_sigmoid=self.cfg.arch.use_sigmoid,
-            use_norm=self.cfg.arch.use_norm,
-            sigmoid_saturation_thresh= self.cfg.arch.sigmoid_saturation_thresh
-            ).to(self.device)
+        super(SGLD, self).__init__(params, defaults)
 
-        current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-        comment = 'DIP+TV'
-        logdir = os.path.join(
-            self.cfg.log_path,
-            current_time + '_' + socket.gethostname() + comment)
-        self.writer = tensorboardX.SummaryWriter(logdir=logdir)
+    def step(self, add_noise=False):
+        """
+        Performs a single optimization step.
+        """
+        loss = None
 
-    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True, use_tv_loss=True):
+        for group in self.param_groups:
+
+            weight_decay = group['weight_decay']
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                d_p = p.grad.data
+                if weight_decay != 0:
+                    d_p.add_(weight_decay, p.data)
+
+                if add_noise:
+                    langevin_noise = p.data.new(p.data.size()).normal_(mean=0, std=1) / np.sqrt(group['lr'])
+                    p.data.add_(-group['noisy_lr'],
+                                0.5 * d_p + langevin_noise)
+                else:
+                    p.data.add_(-group['lr'], 0.5 * d_p)
+
+        return loss
+
+class DeepImagePriorReconstructorSGLD(DeepImagePriorReconstructor):
+   
+    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True, use_tv_loss=True, num_burn_in_steps=10000):
 
         if self.cfg.torch_manual_seed:
             torch.random.manual_seed(self.cfg.torch_manual_seed)
@@ -81,32 +80,35 @@ class DeepImagePriorReconstructor():
             self.net_input = fbp.to(self.device)
 
         self.init_optimizer()
+        self.optimizer = SGLD(self.model.parameters(), lr=self.cfg.optim.lr,  weight_decay=1e-6, noisy_lr=1e-8)
+
         y_delta = noisy_observation.to(self.device)
 
         if self.cfg.optim.loss_function == 'mse':
-            criterion = MSELoss()
+            criterion = MSELoss(reduction='sum')
         else:
             warn('Unknown loss function, falling back to MSE')
-            criterion = MSELoss()
+            criterion = MSELoss(reduction='sum')
 
         best_loss = np.inf
         model_out = self.model(self.net_input)
         best_output, pre_activation_best_output = model_out[0].detach(), model_out[1].detach()
         best_params_state_dict = deepcopy(self.model.state_dict())
 
-        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar, miniters=self.cfg.optim.iterations//100) as pbar:
+        sample_recon = []
+        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar) as pbar:
             for i in pbar:
                 self.optimizer.zero_grad()
                 model_out = self.model(self.net_input)
                 output, pre_activation_output = model_out[0], model_out[1].detach()
-                loss = criterion(self.ray_trafo_module(output), y_delta) 
+                loss = criterion(self.ray_trafo_module(output), y_delta)
                 if use_tv_loss: 
                     loss = loss + self.cfg.optim.gamma * tv_loss(output)
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
+
                 if loss.item() < best_loss:
                     best_params_state_dict = deepcopy(self.model.state_dict())
-                self.optimizer.step()
+                self.optimizer.step(add_noise = False if i < num_burn_in_steps else True)
 
                 for p in self.model.parameters():
                     p.data.clamp_(-1000, 1000) # MIN,MAX
@@ -126,28 +128,11 @@ class DeepImagePriorReconstructor():
                 self.writer.add_scalar('loss', loss.item(),  i)
                 if i % 1000 == 0:
                     self.writer.add_image('reco', normalize(best_output[0, ...]).cpu().numpy(), i)
-
+            
+                if (i > num_burn_in_steps) and (i % 5) == 0:
+                    sample_recon.append(output.detach().cpu())
+        
         self.model.load_state_dict(best_params_state_dict)
         self.writer.close()
 
-        return best_output[0, 0, ...].cpu().numpy(), pre_activation_best_output[0, 0, ...].cpu().numpy()
-
-    def init_optimizer(self):
-        """
-        Initialize the optimizer.
-        """
-
-        self._optimizer = torch.optim.Adam(self.model.parameters(), lr=self.cfg.optim.lr)
-
-    @property
-    def optimizer(self):
-        """
-        :class:`torch.optim.Optimizer` :
-        The optimizer, usually set by :meth:`init_optimizer`, which gets called
-        in :meth:`train`.
-        """
-        return self._optimizer
-
-    @optimizer.setter
-    def optimizer(self, value):
-        self._optimizer = value
+        return best_output[0, 0, ...].cpu().numpy(), pre_activation_best_output[0, 0, ...].cpu().numpy(), torch.cat(sample_recon, dim=0)

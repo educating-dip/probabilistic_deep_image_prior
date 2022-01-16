@@ -10,7 +10,7 @@ from dataset.utils import (
 from dataset.mnist import simulate
 import tensorly as tl
 tl.set_backend('pytorch')
-from deep_image_prior import DeepImagePriorReconstructor
+from deep_image_prior import DeepImagePriorReconstructor, DeepImagePriorReconstructorSGLD
 from deep_image_prior.utils import PSNR, SSIM, bayesianize_architecture, sample_from_bayesianized_model
 from dataset import extract_trafos_as_matrices
 from scalable_linearised_laplace import approx_density_from_samples, approx_kernel_density
@@ -37,7 +37,7 @@ def coordinator(cfg : DictConfig) -> None:
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if i < cfg.get('skip_first_images', 0):
             continue
-
+        
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
@@ -56,6 +56,9 @@ def coordinator(cfg : DictConfig) -> None:
             raise NotImplementedError
 
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
+        if cfg.baseline.name == 'sgld':
+            reconstructor = DeepImagePriorReconstructorSGLD(**ray_trafo, cfg=cfg.net)
+
 
         ray_trafos['ray_trafo_module'].to(reconstructor.device)
         ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
@@ -68,25 +71,37 @@ def coordinator(cfg : DictConfig) -> None:
         lik_hess_inv_no_predcp_diag_meam = (Vh.T @ torch.diag(1/S) @ U.T).diag().mean() # constructing noise in x correction term, sigma_y^2 = 1 (unit-var.)
         
         num_samples = 10000
-        bayesianize_architecture(reconstructor.model, p=0.05)
-        recon, _ = reconstructor.reconstruct(
-                observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device), use_init_model=False)
-        sample_recon = sample_from_bayesianized_model(reconstructor.model, filtbackproj.to(reconstructor.device), mc_samples=num_samples)
-        mean = sample_recon.view(num_samples, -1).mean(dim=0)
-        log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam.cpu()) / example_image.numel()
-
+        if cfg.baseline.name == 'mcdo':
+            bayesianize_architecture(reconstructor.model, p=cfg.baseline.p)
+            _, _ = reconstructor.reconstruct(
+                observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device), use_init_model=False, use_tv_loss=False)
+            sample_recon = sample_from_bayesianized_model(reconstructor.model, filtbackproj.to(reconstructor.device), mc_samples=num_samples)
+            mean = sample_recon.view(num_samples, -1).mean(dim=0)
+            std = ( torch.var(sample_recon.view(num_samples, -1), dim=0) + lik_hess_inv_no_predcp_diag_meam) **.5
+            log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam.cpu()) / example_image.numel()
+        elif cfg.baseline.name == 'sgld':
+            iterations = cfg.net.optim.iterations 
+            cfg.net.optim.iterations = cfg.net.optim.iterations + (5 * num_samples + 1) 
+            _, _, sample_recon = reconstructor.reconstruct(
+                observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device), use_init_model=False, use_tv_loss=False, num_burn_in_steps=iterations)
+            num_samples = sample_recon.shape[0]
+            mean = sample_recon.view(num_samples, -1).mean(dim=0)
+            std = ( torch.var(sample_recon.view(num_samples, -1), dim=0) + lik_hess_inv_no_predcp_diag_meam.cpu()) **.5
+            log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam.cpu()) / example_image.numel()
         torch.save(reconstructor.model.state_dict(),
                 './dip_model_{}.pt'.format(i))
 
         print('DIP reconstruction of sample {:d}'.format(i))
-        print('PSNR:', PSNR(recon, example_image[0, 0].cpu().numpy()))
-        print('SSIM:', SSIM(recon, example_image[0, 0].cpu().numpy()))
+        print('PSNR:', PSNR(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()))
+        print('SSIM:', SSIM(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()))
 
         data = {
                 'filtbackproj': filtbackproj.cpu().numpy(), 
                 'image': example_image.cpu().numpy(), 
                 'recon': mean.cpu().numpy(),
-                'test_log_likelihood': log_prob_kernel_density.cpu().numpy()
+                'std': std.cpu().numpy(), 
+                'psnr': PSNR(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()), 
+                'test_log_likelihood': log_prob_kernel_density
                 }
 
         np.savez('recon_info_{}'.format(i), **data)
