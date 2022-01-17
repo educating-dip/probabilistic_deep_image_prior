@@ -1,34 +1,68 @@
-calibration_uncertainty_estimates: 
-  kmnist_sparse_10:  
-    - path: multirun/2021-11-13/15-19-39/0
-      name: sparse_10_low_noise_regime
-    - path: multirun/2021-11-13/22-30-03/2
-      name: sparse_10_high_noise_regime
-  kmnist_sparse_20: 
-    - path: multirun/2021-11-13/15-19-21/0
-      name: sparse_20_low_noise_regime
-    - path: multirun/2021-11-13/22-29-37/2
-      name: sparse_20_high_noise_regime
-samples:
-  kmnist_sparse_10: #low noise
-    - path: multirun/2021-11-17/11-16-15/0
-      name: sparse_10_low_noise_regime
-  kmnist_sparse_20: #low noise 
-    - path: multirun/2021-11-17/11-16-15/0
-      name: sparse_20_low_noise_regime
-architerture_search:
-  kmnist_sparse_10:
-    - path: multirun/2021-11-16/17-31-53/0
-      name: depth_2_channel_16
-    - path: multirun/2021-11-16/17-42-19/0
-      name: depth_2_channel_32
-    - path: multirun/2021-11-16/17-52-31/0
-      name: depth_2_channel_64
-    - path: multirun/2021-11-16/20-52-15/0
-      name: depth_3_channel_8
-    - path: multirun/2021-11-16/21-06-03/0
-      name: depth_3_channel_16
-    - path: multirun/2021-11-16/18-51-07/2
-      name: depth_3_channel_32
-    - path: multirun/2021-11-16/18-51-07/3
-      name: depth_3_channel_64
+kmnist:
+    5:
+        0.05:
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T10:41:21.328307Z'
+              name: 'sparse-view-5-angles-low-noise' # refined hyperams 
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.652831Z'
+              name: 'sparse-view-5-angles-low-noise'
+        0.1: 
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.652607Z'
+              name: 'sparse-view-5-angles-high-noise'
+    10:
+        0.05:
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-12T16:16:54.456522Z'
+              name: 'sparse-view-10-angles-low-noise'
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.652617Z'
+              name: 'sparse-view-10-angles-low-noise-rerun' 
+        0.1: 
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.651984Z'
+              name: 'sparse-view-10-angles-high-noise'
+    20:
+        0.05:
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-12T18:00:13.541423Z'
+              name: 'sparse-view-20-angles-low-noise'
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:16:29.532543Z'
+              name: 'sparse-view-20-angles-low-noise-rerun'
+        0.1: 
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:16:56.013764Z'
+              name: 'sparse-view-20-angles-high-noise'
+    30:
+        0.05:
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T11:07:00.179667Z'
+              name: 'sparse-view-30-angles-low-noise'
+        0.1: 
+            - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T11:24:57.451371Z'
+              name: 'sparse-view-30-angles-high-noise'
+
+walnut:
+    'ass20_css6_old': # mrglik.optim.iterations=1500 mrglik.impl.vec_batch_size=5 mrglik.optim.tv_samples=5
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-11T19:25:18.596008Z'
+        name: 'walnut-lin-weights-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-11T19:25:18.596341Z'
+        name: 'walnut-lin-weights-type-II'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-11T19:25:18.596178Z'
+        name: 'walnut-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-11T19:25:18.596272Z'
+        name: 'walnut-type-II'
+
+    'ass20_css6': # mrglik.optim.iterations=2000 mrglik.impl.vec_batch_size=5 mrglik.optim.tv_samples=20
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.653648Z'
+        name: 'walnut-lin-weights-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.653639Z'
+        name: 'walnut-lin-weights-type-II'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.653110Z'
+        name: 'walnut-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-13T00:14:58.653448Z'
+        name: 'walnut-type-II'
+    
+    'ass20_css6_grad_clip_10_vec_batch_size': # 'mrglik.optim.iterations=2000', 'mrglik.optim.tv_samples=20', 'mrglik.impl.vec_batch_size=10', 'linearize_weights=True', 'lin_params.iterations=1500'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-15T17:02:21.405935Z' # 'mrglik.optim.include_predcp=False', 
+        name: 'walnut-lin-weights-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-15T17:02:21.406508Z' # 'mrglik.optim.include_predcp=True'
+        name: 'walnut-lin-weights-type-II'
+    
+    'ass20_css6_grad_clip_15_vec_batch_size': # 'mrglik.optim.iterations=2000', 'mrglik.optim.tv_samples=20', 'mrglik.impl.vec_batch_size=15', 'linearize_weights=True', 'lin_params.iterations=1500'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-16T12:50:58.120581Z' # 'mrglik.optim.include_predcp=False', 
+        name: 'walnut-lin-weights-mll'
+      - path: '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-16T12:50:58.120553Z' # 'mrglik.optim.include_predcp=True'
+        name: 'walnut-lin-weights-type-II'
