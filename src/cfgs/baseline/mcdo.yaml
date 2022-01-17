@@ -2,3 +2,4 @@
 baseline: 
   name: mcdo
   p: 0.05
+  use_train_test: False

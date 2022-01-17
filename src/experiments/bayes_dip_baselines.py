@@ -6,7 +6,7 @@ import numpy as np
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
-        load_testset_walnut)
+        load_testset_walnut, load_trainset_MNIST_dataset, load_trainset_KMNIST_dataset)
 from dataset.mnist import simulate
 import tensorly as tl
 tl.set_backend('pytorch')
@@ -27,8 +27,12 @@ def coordinator(cfg : DictConfig) -> None:
     # data: observation, filtbackproj, example_image
     if cfg.name == 'mnist':
         loader = load_testset_MNIST_dataset()
+        if cfg.baseline.use_train_test:
+            loader = load_trainset_MNIST_dataset()
     elif cfg.name == 'kmnist':
         loader = load_testset_KMNIST_dataset()
+        if cfg.baseline.use_train_test:
+            loader = load_trainset_KMNIST_dataset()
     elif cfg.name == 'walnut':
         loader = load_testset_walnut(cfg)
     else:
