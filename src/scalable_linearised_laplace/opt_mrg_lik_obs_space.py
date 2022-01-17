@@ -110,7 +110,7 @@ def optim_marginal_lik_low_rank(
                 clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
                 clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
 
-            if (i-1) % 200 == 0:
+            if (i+1) % 200 == 0:
                 torch.save(optimizer.state_dict(),
                     './optimizer_{}_iter_{}.pt'.format(comment, i))
                 torch.save(bayesianized_model.state_dict(),

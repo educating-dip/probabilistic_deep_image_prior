@@ -143,11 +143,12 @@ def coordinator(cfg : DictConfig) -> None:
             ray_trafos['ray_trafo_module'].to(torch.float64)
             ray_trafos['ray_trafo_module_adj'].to(torch.float64)
 
+        load_iter = cfg.density.assemble_cov_obs_mat.get('load_mrglik_opt_iter', None)
         bayesianized_model.load_state_dict(torch.load(os.path.join(
-                load_path, 'bayesianized_model_{}.pt'.format(i)),
+                load_path, 'bayesianized_model_{}.pt'.format(i) if load_iter is None else 'bayesianized_model_mrglik_opt_recon_num_{}_iter_{}.pt'.format(i, load_iter)),
                 map_location=reconstructor.device))
         log_noise_model_variance_obs = torch.load(os.path.join(
-                load_path, 'log_noise_model_variance_obs_{}.pt'.format(i)),
+                load_path, 'log_noise_model_variance_obs_{}.pt'.format(i) if load_iter is None else 'log_noise_model_variance_obs_mrglik_opt_recon_num_{}_iter_{}.pt'.format(i, load_iter)),
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
 
         if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization
