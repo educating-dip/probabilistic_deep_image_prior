@@ -94,6 +94,7 @@ def coordinator(cfg : DictConfig) -> None:
         print('DIP reconstruction of sample {:d}'.format(i))
         print('PSNR:', PSNR(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()))
         print('SSIM:', SSIM(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()))
+        print('Test log-lik:', log_prob_kernel_density)
 
         data = {
                 'filtbackproj': filtbackproj.cpu().numpy(), 
