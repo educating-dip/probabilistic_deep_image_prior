@@ -34,6 +34,7 @@ def coordinator(cfg : DictConfig) -> None:
     else:
         raise NotImplementedError
 
+    avg_image_metric, avg_test_log_lik = [], []
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if i < cfg.get('skip_first_images', 0):
             continue
@@ -106,6 +107,17 @@ def coordinator(cfg : DictConfig) -> None:
                 }
 
         np.savez('recon_info_{}'.format(i), **data)
+        avg_image_metric.append(PSNR(mean.view(*example_image.shape[2:]).cpu().numpy(), example_image[0, 0].cpu().numpy()))
+        avg_test_log_lik.append(log_prob_kernel_density)
+    
+    print('avg PSNR: ', np.mean(avg_image_metric))
+    print('avg test log-lik: ', np.mean(avg_test_log_lik))
+    overall_data = {
+                'avg_image_metric': np.mean(avg_image_metric), 
+                'avg_test_log_likelihood': np.mean(avg_test_log_lik)
+                }
+    np.savez('overall_metrics{}'.format(i), **overall_data)
+
 
 if __name__ == '__main__':
     coordinator()
