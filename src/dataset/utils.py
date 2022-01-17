@@ -33,6 +33,26 @@ def load_testset_KMNIST_dataset(path='kmnist', batchsize=1,
                                 (0.1307,), (0.3081,))]))
     return DataLoader(testset, batchsize, shuffle=False)
 
+def load_trainset_MNIST_dataset(path='mnist', batchsize=1,
+                               crop=False):
+    path = os.path.join(get_original_cwd(), path)
+    trainset = datasets.MNIST(root=path, train=True, download=True,
+                             transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(
+                                (0.1307,), (0.3081,))]))
+    return DataLoader(trainset, batchsize, shuffle=False)
+
+def load_trainset_KMNIST_dataset(path='kmnist', batchsize=1,
+                               crop=False):
+    path = os.path.join(get_original_cwd(), path)
+    trainset = datasets.KMNIST(root=path, train=True, download=True,
+                             transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(
+                                (0.1307,), (0.3081,))]))
+    return DataLoader(trainset, batchsize, shuffle=False)
+
 def load_testset_walnut(cfg):
     observation, filtbackproj, ground_truth = get_walnut_data(cfg)
 
