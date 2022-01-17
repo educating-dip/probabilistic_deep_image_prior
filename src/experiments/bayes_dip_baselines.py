@@ -86,7 +86,7 @@ def coordinator(cfg : DictConfig) -> None:
             log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_no_predcp_diag_meam.cpu()) / example_image.numel()
         elif cfg.baseline.name == 'sgld':
             iterations = cfg.net.optim.iterations 
-            cfg.net.optim.iterations = cfg.net.optim.iterations + (5 * num_samples + 1) 
+            cfg.net.optim.iterations = cfg.net.optim.iterations + (1 * num_samples + 1) 
             _, _, sample_recon = reconstructor.reconstruct(
                 observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device), use_init_model=False, use_tv_loss=False, num_burn_in_steps=iterations)
             num_samples = sample_recon.shape[0]

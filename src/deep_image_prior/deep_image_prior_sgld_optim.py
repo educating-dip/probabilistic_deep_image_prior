@@ -129,7 +129,7 @@ class DeepImagePriorReconstructorSGLD(DeepImagePriorReconstructor):
                 if i % 1000 == 0:
                     self.writer.add_image('reco', normalize(best_output[0, ...]).cpu().numpy(), i)
             
-                if (i > num_burn_in_steps) and (i % 5) == 0:
+                if (i > num_burn_in_steps):
                     sample_recon.append(output.detach().cpu())
         
         self.model.load_state_dict(best_params_state_dict)
