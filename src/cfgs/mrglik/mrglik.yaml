@@ -9,6 +9,7 @@ priors:
   lengthscale_init: 0.1
   variance_init: 1
   include_normal_priors: True
+  clamp_variances: True
 impl:
   use_fwAD_for_jvp: True
   vec_batch_size: 2

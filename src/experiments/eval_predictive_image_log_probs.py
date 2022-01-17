@@ -1,9 +1,10 @@
 import os
 from itertools import islice
 import numpy as np
+import pandas as pd
 import random
 import hydra
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
@@ -19,7 +20,7 @@ from scalable_linearised_laplace import (
         get_predictive_cov_image_block, predictive_image_block_log_prob,
         get_image_block_masks)
 
-### Merges the results from a complete set of runs of
+### Evaluates the results from a set of runs of
 ### ``compute_single_predictive_cov_block.py`` (specified via
 ### `density.eval_predictive_image_log_probs.load_path_list`).
 
@@ -111,35 +112,62 @@ def coordinator(cfg : DictConfig) -> None:
 
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
+        def get_method_name(load_cfg, optim_cfg):
+            method_name_parts = []
+            method_name_parts.append('tv_map' if optim_cfg.mrglik.optim.include_predcp else 'mll')
+            return '_'.join(method_name_parts)
+
         load_paths_per_block = {}
         for load_path in load_path_list:
-            # TODO assert cfg
+            load_cfg = OmegaConf.load(os.path.join(load_path, '.hydra', 'config.yaml'))
+            load_job_name = OmegaConf.load(os.path.join(load_path, '.hydra', 'hydra.yaml')).hydra.job.name
+            assert load_job_name == 'compute_single_predictive_cov_block'
+            assert load_cfg.density.block_size_for_approx == cfg.density.block_size_for_approx
+
+            optim_path = load_cfg.density.compute_single_predictive_cov_block.load_path
+            optim_cfg = OmegaConf.load(os.path.join(optim_path, '.hydra', 'config.yaml'))
+            assert optim_cfg.linearize_weights == True
+            method_name = get_method_name(load_cfg, optim_cfg)
+
+            blocks_found = []
             for block_idx in range(len(block_masks)):
                 if os.path.isfile(os.path.join(load_path, 'predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))):
-                    assert block_idx not in load_paths_per_block
-                    load_paths_per_block[block_idx] = load_path
+                    load_paths_per_block.setdefault(block_idx, {})
+                    assert method_name not in load_paths_per_block[block_idx]
+                    load_paths_per_block[block_idx][method_name] = load_path
+                    blocks_found.append(block_idx)
+            blocks_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx in blocks_found]  # sort
+            blocks_not_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx not in blocks_found]
+            print('in path {}:'.format(load_path))
+            print('  found blocks {}'.format(blocks_found))
+            print('  missing blocks {}'.format(blocks_not_found))
 
-        block_diags = []
-        block_log_probs = []
-        block_eps_values = []
-        # for block_idx, load_path_block in enumerate(load_path_list):
-        for block_idx, mask in enumerate(block_masks):
-            load_path_block = load_paths_per_block.get(block_idx)
-            if load_path_block is None:
-                continue
+        # load_path_df = pd.DataFrame([load_paths for block_idx, load_paths in load_paths_per_block.items()])
+
+        def get_metrics(block_idx, load_path_block):
             predictive_image_log_prob_block_dict = torch.load(os.path.join(
                     load_path_block, 'predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i)), map_location=device)
-            block_diags.append(predictive_image_log_prob_block_dict['block_diag'])
-            block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'])
-            block_eps_values.append(predictive_image_log_prob_block_dict['block_eps'])
+            mask_inds = predictive_image_log_prob_block_dict['mask_inds']
+            metrics = {
+                'block_idx': block_idx,
+                'log_prob': predictive_image_log_prob_block_dict['block_log_prob'].item() / example_image.flatten()[mask_inds].numel(),
+                'mean_abs_error': torch.mean(torch.abs((recon.view(-1)-example_image.view(-1))[mask_inds])).item(),
+                'max_abs_error': torch.max(torch.abs((recon.view(-1)-example_image.view(-1))[mask_inds])).item(),
+                'min_sqrt_diag': torch.min(torch.sqrt(predictive_image_log_prob_block_dict['block_diag'])).item(),
+                'block_eps': predictive_image_log_prob_block_dict['block_eps'],
+            }
+            return metrics
 
-            mask = predictive_image_log_prob_block_dict['mask']
-            print('block_idx', block_idx)
-            print('  log_prob', predictive_image_log_prob_block_dict['block_log_prob'].item() / example_image.flatten()[mask].numel())
-            print('  mae', torch.mean(torch.abs((recon.view(-1)-example_image.view(-1))[mask])).item())
-            print('  max abs error', torch.max(torch.abs((recon.view(-1)-example_image.view(-1))[mask])).item())
-            print('  min sqrt(diag)', torch.min(torch.sqrt(predictive_image_log_prob_block_dict['block_diag'])).item())
-            print('  block_eps', predictive_image_log_prob_block_dict['block_eps'])
+        metrics_records = []
+        for block_idx, load_paths in load_paths_per_block.items():
+            for method_name, load_path_block in load_paths.items():
+                record = {'block_idx': block_idx, 'method_name': method_name}
+                record.update(get_metrics(block_idx, load_path_block))
+                metrics_records.append(record)
+
+        df = pd.DataFrame(metrics_records)
+        df.set_index('block_idx')
+        print(df.to_string())
 
 if __name__ == '__main__':
     coordinator()

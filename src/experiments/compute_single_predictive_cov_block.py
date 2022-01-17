@@ -153,6 +153,10 @@ def coordinator(cfg : DictConfig) -> None:
                 load_path, 'log_noise_model_variance_obs_{}.pt'.format(i)),
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
 
+        if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization; if post-hoc clamping, we expect the user to load a cov_obs_mat that was computed with clamping, too
+            clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
+            clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
+
         cov_obs_mat_load_path = cfg.density.compute_single_predictive_cov_block.get('cov_obs_mat_load_path', None)
         if cov_obs_mat_load_path is None:
             cov_obs_mat_load_path = load_path
