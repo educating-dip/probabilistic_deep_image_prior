@@ -80,7 +80,7 @@ class DeepImagePriorReconstructorSGLD(DeepImagePriorReconstructor):
             self.net_input = fbp.to(self.device)
 
         self.init_optimizer()
-        self.optimizer = SGLD(self.model.parameters(), lr=self.cfg.optim.lr,  weight_decay=1e-6, noisy_lr=1e-8)
+        self.optimizer = SGLD(self.model.parameters(), lr=self.cfg.optim.lr,  weight_decay=1e-6, noisy_lr=1e-7)
 
         y_delta = noisy_observation.to(self.device)
 
