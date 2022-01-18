@@ -4,6 +4,7 @@ from skimage.metrics import structural_similarity
 from torch.nn.modules.dropout import _DropoutNd
 import torch.nn.functional as F
 import torch.nn as nn
+from tqdm import tqdm
 
 def diag_gaussian_log_prob(observation, proj_recon, sigma):
 
@@ -70,8 +71,10 @@ def bayesianize_architecture(model, p=0.05):
                     if sub_module.kernel_size == (3, 3):
                         setattr(module, name_sub_module, conv2d_dropout(sub_module, p))
 
-def sample_from_bayesianized_model(model, filtbackproj, mc_samples):
+def sample_from_bayesianized_model(model, filtbackproj, mc_samples, device=None):
     sampled_recons = []
-    for _ in range(mc_samples):
-        sampled_recons.append(model.forward(filtbackproj)[0].detach())
+    if device is None: 
+        device = filtbackproj.device
+    for _  in tqdm(range(mc_samples), desc='sampling'):
+        sampled_recons.append(model.forward(filtbackproj)[0].detach().to(device))
     return torch.cat(sampled_recons, dim=0)
