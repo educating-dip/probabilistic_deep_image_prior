@@ -1,4 +1,5 @@
 import os
+import json
 from itertools import islice
 import numpy as np
 import pandas as pd
@@ -123,7 +124,7 @@ def coordinator(cfg : DictConfig) -> None:
         for load_path in load_path_list:
             load_cfg = OmegaConf.load(os.path.join(load_path, '.hydra', 'config.yaml'))
             load_job_name = OmegaConf.load(os.path.join(load_path, '.hydra', 'hydra.yaml')).hydra.job.name
-            assert load_job_name == 'compute_single_predictive_cov_block'
+            assert load_job_name in ['compute_single_predictive_cov_block', 'estimate_density_from_samples']
             assert load_cfg.density.block_size_for_approx == cfg.density.block_size_for_approx
 
             optim_path = load_cfg.density.compute_single_predictive_cov_block.load_path
@@ -167,9 +168,30 @@ def coordinator(cfg : DictConfig) -> None:
                 record.update(get_metrics(block_idx, load_path_block))
                 metrics_records.append(record)
 
+        with open('results_{}.json'.format(i), 'w') as f:
+            json.dump(metrics_records, f, indent=1)
+
         df = pd.DataFrame(metrics_records)
         df.set_index('block_idx')
-        print(df.to_string())
+        results_table_str = df.to_string()
+        print(results_table_str)
+
+        with open('results_{}.txt'.format(i), 'w') as f:
+            f.write(results_table_str)
+
+        log_probs_per_method = {}
+        for record in metrics_records:
+            log_probs_per_method.setdefault(record['method_name'], {})
+            log_probs_per_method[record['method_name']][record['block_idx']] = record['log_prob']
+        common_blocks = np.array(range(len(block_masks)))
+        for method_name, log_probs_dict in log_probs_per_method.items():
+            common_blocks = np.intersect1d(common_blocks, list(log_probs_dict.keys()))
+        print('number of common blocks for all methods:', len(common_blocks))
+        mean_log_probs_per_method_on_common_blocks = {
+            method_name: np.mean([log_probs_dict[block_idx] for block_idx in common_blocks])
+            for method_name, log_probs_dict in log_probs_per_method.items()
+        }
+        print('mean log probs for common blocks:', mean_log_probs_per_method_on_common_blocks)
 
 if __name__ == '__main__':
     coordinator()

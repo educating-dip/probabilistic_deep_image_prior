@@ -148,7 +148,7 @@ def approx_predictive_cov_image_block_from_samples(mc_sample_images, noise_x_cor
     cov = torch.cov(mc_sample_images.T, correction=0)
 
     if noise_x_correction_term is not None:
-        cov[np.diag_indices(cov.shape[0])] += noise_x_correction_term  # TODO confirm removing **0.5
+        cov[np.diag_indices(cov.shape[0])] += noise_x_correction_term
 
     return cov
 

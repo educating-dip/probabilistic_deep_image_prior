@@ -193,8 +193,9 @@ def coordinator(cfg : DictConfig) -> None:
             pred_test[np.diag_indices(pred_test.shape[0])] += lik_hess_inv_diag_mean
             predictive_cov_image_exact[np.diag_indices(predictive_cov_image_exact.shape[0])] += lik_hess_inv_diag_mean
 
-        test_approx_blocks = False
-        test_approx_blocks_from_samples = True
+        test_approx_blocks = True
+        test_approx_blocks_from_samples = False
+        test_from_samples_only_diag = False
 
         block_size_list = [cfg.size, 14, 7, 4, 2]
 
@@ -213,9 +214,10 @@ def coordinator(cfg : DictConfig) -> None:
 
         num_mc_samples = 10000
 
-        mc_sample_images = sample_from_posterior(ray_trafos, observation.to(reconstructor.device), filtbackproj.to(reconstructor.device),
-                cov_obs_mat_chol, reconstructor.model, bayesianized_model, fwAD_be_model, fwAD_be_modules,
-                mc_samples=num_mc_samples, vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+        if test_approx_blocks_from_samples or test_from_samples_only_diag:
+            mc_sample_images = sample_from_posterior(ray_trafos, observation.to(reconstructor.device), filtbackproj.to(reconstructor.device),
+                    cov_obs_mat_chol, reconstructor.model, bayesianized_model, fwAD_be_model, fwAD_be_modules,
+                    mc_samples=num_mc_samples, vec_batch_size=cfg.mrglik.impl.vec_batch_size)
 
         approx_log_prob_from_samples_list = []
         for block_size in block_size_list if test_approx_blocks_from_samples else []:
@@ -249,9 +251,10 @@ def coordinator(cfg : DictConfig) -> None:
         for block_size, approx_log_prob_from_samples in zip(block_size_list, approx_log_prob_from_samples_list):
             print('approx from samples using block size {}:'.format(block_size), approx_log_prob_from_samples / example_image.numel())
 
-        log_prob_from_samples = approx_density_from_samples(recon.to(reconstructor.device), example_image.to(reconstructor.device), mc_sample_images, noise_x_correction_term=lik_hess_inv_diag_mean)
+        if test_from_samples_only_diag:
+            log_prob_from_samples = approx_density_from_samples(recon.to(reconstructor.device), example_image.to(reconstructor.device), mc_sample_images, noise_x_correction_term=lik_hess_inv_diag_mean)
 
-        print('sample based using only diag:', log_prob_from_samples / example_image.numel())
+            print('sample based using only diag:', log_prob_from_samples / example_image.numel())
 
         print('exact using block_priors:', log_prob_block_priors / example_image.numel())
         print('exact:', log_prob / example_image.numel())

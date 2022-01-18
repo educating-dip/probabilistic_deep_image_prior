@@ -205,8 +205,14 @@ def coordinator(cfg : DictConfig) -> None:
             torch.manual_seed(cfg.density.estimate_density_from_samples.seed)
 
         mc_sample_images = []
-        if cfg.density.estimate_density_from_samples.samples_load_path_list:
-            for samples_load_path in cfg.density.estimate_density_from_samples.samples_load_path_list:
+        samples_load_path_list = cfg.density.estimate_density_from_samples.samples_load_path_list
+        if samples_load_path_list:
+            if isinstance(samples_load_path_list, str):
+                samples_load_path_list = [samples_load_path_list]
+            for samples_load_path in samples_load_path_list:
+                if not os.path.isdir(samples_load_path):
+                    print('skipping non-existent directory:', samples_load_path)
+                    continue
                 chunk_idx = 0
                 finding_files = True
                 while finding_files:

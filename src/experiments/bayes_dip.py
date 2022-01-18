@@ -162,6 +162,10 @@ def coordinator(cfg : DictConfig) -> None:
         torch.save({'log_noise_model_variance_obs': log_noise_model_variance_obs},
             './log_noise_model_variance_obs_{}.pt'.format(i))
 
+        if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization
+            clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
+            clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
+
         cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
                 cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
