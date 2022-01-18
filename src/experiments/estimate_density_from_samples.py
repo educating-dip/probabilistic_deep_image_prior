@@ -248,7 +248,7 @@ def coordinator(cfg : DictConfig) -> None:
 
             mask = block_masks[block_idx]
 
-            mc_sample_image_blocks = mc_sample_images.view(cfg.density.num_mc_samples, -1)[:, mask]
+            mc_sample_image_blocks = mc_sample_images.view(mc_sample_images.shape[0], -1)[:, mask]
 
             predictive_cov_image_block = approx_predictive_cov_image_block_from_samples(
                     mc_sample_image_blocks.to(reconstructor.device), noise_x_correction_term=lik_hess_inv_diag_mean)
