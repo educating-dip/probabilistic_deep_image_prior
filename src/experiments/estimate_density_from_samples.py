@@ -17,7 +17,7 @@ from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        get_predictive_cov_image_block, predictive_image_block_log_prob,
+        sample_from_posterior, approx_predictive_cov_image_block_from_samples, predictive_image_block_log_prob,
         get_image_block_masks, stabilize_predictive_cov_image_block,
         stabilize_prior_cov_obs_mat, clamp_params)
 
@@ -200,7 +200,40 @@ def coordinator(cfg : DictConfig) -> None:
             lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_diag) * np.exp(log_noise_model_variance_obs.item())
         print('noise_x_correction_term:', lik_hess_inv_diag_mean)
 
-        # compute predictive image log prob for block
+        # draw samples from posterior
+        if cfg.density.estimate_density_from_samples.seed is not None:
+            torch.manual_seed(cfg.density.estimate_density_from_samples.seed)
+
+        mc_sample_images = []
+        if cfg.density.estimate_density_from_samples.samples_load_path_list:
+            for samples_load_path in cfg.density.estimate_density_from_samples.samples_load_path_list:
+                chunk_idx = 0
+                finding_files = True
+                while finding_files:
+                    try:
+                        mc_sample_images_chunk = torch.load(
+                                os.path.join(samples_load_path, 'posterior_samples_chunk{}_{}.pt'.format(chunk_idx, i)), map_location='cpu')
+                        mc_sample_images.append(mc_sample_images_chunk)
+                        chunk_idx += 1
+                    except FileNotFoundError:
+                        finding_files = False
+                print('loaded {} posterior sample chunks from path {}'.format(chunk_idx, samples_load_path))
+        else:
+            save_samples_num_chunks = cfg.density.estimate_density_from_samples.save_samples_chunk_size
+            for chunk_idx, sample_idx in enumerate(range(0, cfg.density.num_mc_samples, cfg.density.estimate_density_from_samples.save_samples_chunk_size)):
+                    print('drawing samples from posterior: {}/{}'.format(sample_idx, cfg.density.num_mc_samples))
+                    chunk_size = min(cfg.density.estimate_density_from_samples.save_samples_chunk_size, cfg.density.num_mc_samples - sample_idx)
+                    mc_sample_images_chunk = sample_from_posterior(ray_trafos, observation.to(reconstructor.device), filtbackproj.to(reconstructor.device),
+                            torch.linalg.cholesky(cov_obs_mat), reconstructor.model, bayesianized_model, fwAD_be_model, fwAD_be_modules,
+                            mc_samples=chunk_size, vec_batch_size=cfg.mrglik.impl.vec_batch_size, device='cpu')
+                    mc_sample_images.append(mc_sample_images_chunk)
+                    if cfg.density.estimate_density_from_samples.save_samples:
+                        torch.save(mc_sample_images_chunk,
+                                './posterior_samples_chunk{}_{}.pt'.format(chunk_idx, i))
+        mc_sample_images = torch.cat(mc_sample_images, axis=0)
+        print('total number of posterior samples:', mc_sample_images.shape[0])
+
+        # compute predictive image log prob for blocks
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
         block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx
@@ -215,20 +248,15 @@ def coordinator(cfg : DictConfig) -> None:
 
             mask = block_masks[block_idx]
 
-            predictive_cov_image_block = get_predictive_cov_image_block(
-                    mask, torch.linalg.cholesky(cov_obs_mat), ray_trafos, filtbackproj.to(reconstructor.device),
-                    bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules,
-                    vec_batch_size=cfg.mrglik.impl.vec_batch_size,
-                    eps=None, # handle later
-                    cov_image_eps=cfg.density.cov_image_eps, return_cholesky=False)
+            mc_sample_image_blocks = mc_sample_images.view(cfg.density.num_mc_samples, -1)[:, mask]
+
+            predictive_cov_image_block = approx_predictive_cov_image_block_from_samples(
+                    mc_sample_image_blocks.to(reconstructor.device), noise_x_correction_term=lik_hess_inv_diag_mean)
 
             if not torch.all(torch.isfinite(predictive_cov_image_block)):
                 errors.append(block_idx)
                 print('skipping block due to nan or inf occurences')
                 continue
-
-            if lik_hess_inv_diag_mean is not None:
-                predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += lik_hess_inv_diag_mean
 
             if cfg.density.do_eps_sweep:
                 eps_sweep_values = np.logspace(-7, -1, 13) * predictive_cov_image_block.diag().mean().item()
@@ -254,6 +282,8 @@ def coordinator(cfg : DictConfig) -> None:
                     recon.to(reconstructor.device).flatten()[mask],
                     example_image.to(reconstructor.device).flatten()[mask],
                     predictive_cov_image_block)
+
+            print('sample based log prob for block {}: {}'.format(block_idx, block_log_prob / mask.sum()))
 
             predictive_image_log_prob_block_dict = {'mask_inds': np.nonzero(mask)[0], 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag(), 'block_eps': block_eps}
             if cfg.density.compute_single_predictive_cov_block.save_full_block:

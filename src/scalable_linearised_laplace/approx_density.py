@@ -134,6 +134,24 @@ def get_predictive_cov_image_block(mask, cov_obs_mat_chol, ray_trafos, filtbackp
 
     return torch.linalg.cholesky(predictive_cov_image_block) if return_cholesky else predictive_cov_image_block
 
+def approx_predictive_cov_image_block_from_samples(mc_sample_images, noise_x_correction_term=None):
+
+    mc_samples = mc_sample_images.shape[0]
+
+    mc_sample_images = mc_sample_images.view(mc_samples, -1)
+
+    # mean = torch.mean(mc_sample_images, dim=0, keepdim=True)
+    # diffs = mc_sample_images - mean  # samples x image
+
+    # cov = diffs.T @ diffs / diffs.shape[0]  # image x image
+
+    cov = torch.cov(mc_sample_images.T, correction=0)
+
+    if noise_x_correction_term is not None:
+        cov[np.diag_indices(cov.shape[0])] += noise_x_correction_term  # TODO confirm removing **0.5
+
+    return cov
+
 def stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode, eps):
     block_diag_mean = predictive_cov_image_block.diag().mean().detach().cpu().numpy()
     if eps_mode == 'abs':
@@ -182,6 +200,36 @@ def predictive_image_log_prob(
                 cov_image_eps=cov_image_eps, return_cholesky=False)
         if noise_x_correction_term is not None: 
             predictive_cov_image_block[np.diag_indices(predictive_cov_image_block.shape[0])] += noise_x_correction_term
+
+        block_eps = stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=eps_mode, eps=eps)
+        block_eps_values.append(block_eps)
+
+        image_block_diags.append(predictive_cov_image_block.diag())
+        image_block_log_probs.append(predictive_image_block_log_prob(recon.flatten()[mask], ground_truth.flatten()[mask], predictive_cov_image_block))
+
+    approx_image_log_prob = torch.sum(torch.stack(image_block_log_probs))
+
+    return approx_image_log_prob, block_masks, image_block_log_probs, image_block_diags, block_eps_values
+
+def predictive_image_log_prob_from_samples(
+        recon, observation, ground_truth, ray_trafos, bayesianized_model, filtbackproj, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, eps_mode, eps, block_size, vec_batch_size, cov_obs_mat_chol=None, mc_sample_images=None, noise_x_correction_term=None):
+
+    block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size, flatten=True)
+
+    if cov_obs_mat_chol is None:
+        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs, vec_batch_size, use_fwAD_for_jvp=True, add_noise_model_variance_obs=True)
+        cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
+        cov_obs_mat_chol = torch.linalg.cholesky(cov_obs_mat)
+
+    if mc_sample_images is None:
+        mc_sample_images = sample_from_posterior(ray_trafos, observation, filtbackproj, cov_obs_mat_chol, hooked_model, bayesianized_model, fwAD_be_model, fwAD_be_modules, mc_samples, vec_batch_size)
+
+    image_block_diags = []
+    image_block_log_probs = []
+    block_eps_values = []
+    for mask in block_masks:
+        predictive_cov_image_block = approx_predictive_cov_image_block_from_samples(
+                mc_sample_images.view(mc_sample_images.shape[0], -1)[:, mask], noise_x_correction_term=noise_x_correction_term)
 
         block_eps = stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=eps_mode, eps=eps)
         block_eps_values.append(block_eps)

@@ -62,6 +62,8 @@ def coordinator(cfg : DictConfig) -> None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
         if cfg.name in ['mnist', 'kmnist']:
+            raise NotImplementedError  # load_path is missing
+
             example_image, _ = data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
             ray_trafos['ray_trafo_module_adj'].to(example_image.device)

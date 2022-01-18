@@ -19,10 +19,10 @@ from linearized_laplace import compute_jacobian_single_batch, image_space_lin_mo
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, prior_cov_obs_mat_mul, get_prior_cov_obs_mat, get_diag_prior_cov_obs_mat,
         get_unet_batch_ensemble, get_fwAD_model, compute_exact_log_det_grad, compute_approx_log_det_grad,
-        get_predictive_cov_image_block, get_exact_predictive_cov_image_mat, predictive_image_log_prob)
+        get_predictive_cov_image_block, get_exact_predictive_cov_image_mat, predictive_image_log_prob,
+        sample_from_posterior, approx_density_from_samples, predictive_image_log_prob_from_samples)
 
 # may require a good network reco and/or high precision computation
-# TODO add noise term for x
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -162,18 +162,74 @@ def coordinator(cfg : DictConfig) -> None:
 
         print('diff (predictive_cov_image_block-predictive_cov_image_exact).diag()', torch.sum(torch.abs(predictive_cov_image_block.diag() - predictive_cov_image_exact.diag())))
 
+        lik_hess_inv_diag_mean = None
+        if cfg.name in ['mnist', 'kmnist']:
+            from dataset import extract_trafos_as_matrices
+            import tensorly as tl
+            tl.set_backend('pytorch')
+            # pseudo-inverse computation
+            trafos = extract_trafos_as_matrices(ray_trafos)
+            trafo = trafos[0]
+            if cfg.use_double:
+                trafo = trafo.to(torch.float64)
+            trafo = trafo.to(reconstructor.device)
+            trafo_T_trafo = trafo.T @ trafo
+            U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
+            lik_hess_inv_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
+        elif cfg.name == 'walnut':
+            # pseudo-inverse computation
+            trafo = ray_trafos['ray_trafo_mat'].reshape(-1, np.prod(ray_trafos['space'].shape))
+            if cfg.use_double:
+                trafo = trafo.astype(np.float64)
+            U_trafo, S_trafo, Vh_trafo = scipy.sparse.linalg.svds(trafo, k=100)
+            # (Vh.T S U.T U S Vh)^-1 == (Vh.T S^2 Vh)^-1 == Vh.T S^-2 Vh
+            S_inv_Vh_trafo = scipy.sparse.diags(1/S_trafo) @ Vh_trafo
+            # trafo_T_trafo_inv_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
+            trafo_T_trafo_inv_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
+            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_inv_diag) * np.exp(log_noise_model_variance_obs.item())
+        print('noise_x_correction_term:', lik_hess_inv_diag_mean)
+
+        if lik_hess_inv_diag_mean is not None:
+            pred_test[np.diag_indices(pred_test.shape[0])] += lik_hess_inv_diag_mean
+            predictive_cov_image_exact[np.diag_indices(predictive_cov_image_exact.shape[0])] += lik_hess_inv_diag_mean
+
+        test_approx_blocks = False
+        test_approx_blocks_from_samples = True
+
         block_size_list = [cfg.size, 14, 7, 4, 2]
 
         approx_log_prob_list = []
-        for block_size in block_size_list:
+        for block_size in block_size_list if test_approx_blocks else []:
             approx_log_prob, _, _, _, _ = predictive_image_log_prob(
                     recon.to(reconstructor.device), example_image.to(reconstructor.device),
                     ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
                     fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
                     eps_mode='auto', eps=1e-3, cov_image_eps=1e-6,
                     block_size=block_size,
-                    vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+                    vec_batch_size=cfg.mrglik.impl.vec_batch_size,
+                    cov_obs_mat_chol=cov_obs_mat_chol,
+                    noise_x_correction_term=lik_hess_inv_diag_mean)
             approx_log_prob_list.append(approx_log_prob)
+
+        num_mc_samples = 10000
+
+        mc_sample_images = sample_from_posterior(ray_trafos, observation.to(reconstructor.device), filtbackproj.to(reconstructor.device),
+                cov_obs_mat_chol, reconstructor.model, bayesianized_model, fwAD_be_model, fwAD_be_modules,
+                mc_samples=num_mc_samples, vec_batch_size=cfg.mrglik.impl.vec_batch_size)
+
+        approx_log_prob_from_samples_list = []
+        for block_size in block_size_list if test_approx_blocks_from_samples else []:
+            approx_log_prob_from_samples, _, _, _, _ = predictive_image_log_prob_from_samples(
+                    recon.to(reconstructor.device), observation.to(reconstructor.device), example_image.to(reconstructor.device),
+                    ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
+                    fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
+                    eps_mode='auto', eps=1e-3,
+                    block_size=block_size,
+                    vec_batch_size=cfg.mrglik.impl.vec_batch_size,
+                    cov_obs_mat_chol=cov_obs_mat_chol,
+                    mc_sample_images=mc_sample_images,
+                    noise_x_correction_term=lik_hess_inv_diag_mean)
+            approx_log_prob_from_samples_list.append(approx_log_prob_from_samples)
 
         dist_block_priors = torch.distributions.multivariate_normal.MultivariateNormal(
                     loc=recon.to(reconstructor.device).flatten(),
@@ -188,11 +244,19 @@ def coordinator(cfg : DictConfig) -> None:
         log_prob = dist.log_prob(example_image.to(reconstructor.device).flatten())
 
         for block_size, approx_log_prob in zip(block_size_list, approx_log_prob_list):
-            print('approx using block size {}:'.format(block_size), approx_log_prob)
-        print('exact using block_priors:', log_prob_block_priors)
-        print('exact:', log_prob)
+            print('approx using block size {}:'.format(block_size), approx_log_prob / example_image.numel())
 
-    print('max GPU memory used:', torch.cuda.max_memory_allocated())
+        for block_size, approx_log_prob_from_samples in zip(block_size_list, approx_log_prob_from_samples_list):
+            print('approx from samples using block size {}:'.format(block_size), approx_log_prob_from_samples / example_image.numel())
+
+        log_prob_from_samples = approx_density_from_samples(recon.to(reconstructor.device), example_image.to(reconstructor.device), mc_sample_images, noise_x_correction_term=lik_hess_inv_diag_mean)
+
+        print('sample based using only diag:', log_prob_from_samples / example_image.numel())
+
+        print('exact using block_priors:', log_prob_block_priors / example_image.numel())
+        print('exact:', log_prob / example_image.numel())
+
+    print('max GPU memory used:', torch.cuda.max_memory_allocated() / example_image.numel())
 
 if __name__ == '__main__':
     coordinator()
