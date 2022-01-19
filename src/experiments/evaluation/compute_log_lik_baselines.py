@@ -20,27 +20,27 @@ def compute_test_log_liks(path, num_images):
 
 DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
 experiment_name = 'kmnist'
-rows = ['Bayes DIP (MCDO)']
+rows = ['DIP-MCDO', 'DIP-SGLD']
 
 table_dict = {}
 if experiment_name == 'kmnist':
     # gathering data
     for stddev in [0.05, 0.1]:
         for num_angles in [5, 10, 20, 30]:
-            for run_name in ['kmnist_mcdo_baseline.yaml']:
+            for run_name in ['kmnist_mcdo_baseline_bw_005.yaml', 'kmnist_sgld_baseline.yaml']:
                 runs = OmegaConf.load(os.path.join(DIRPATH, run_name))
                 path_to_data = runs[num_angles][stddev]
                 exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
                 data = compute_test_log_liks(path_to_data, exp_conf.num_images)
-                table_dict[(num_angles, stddev)] = data
+                table_dict[(run_name, num_angles, stddev)] = data
     # constructing table
     for stddev in [0.05, 0.1]:
         print(stddev)
         table = ''
-        for i, row in enumerate(rows):
+        for row, run_name in zip(rows, ['kmnist_mcdo_baseline_bw_005.yaml', 'kmnist_sgld_baseline.yaml']):
             out_row = row
             for num_angles in [5, 10, 20, 30]:
-                out_row += '& ${:.3f} \\pm {:.3f}$'.format(*table_dict[(num_angles, stddev)])
+                out_row += '& ${:.3f} \\pm {:.3f}$'.format(*table_dict[(run_name, num_angles, stddev)])
             table += out_row + '\\\\ \n'
         print(table)
 else: 

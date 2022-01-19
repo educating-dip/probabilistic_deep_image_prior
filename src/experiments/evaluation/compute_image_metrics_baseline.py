@@ -28,32 +28,28 @@ def compute_test_image_metrics(path, num_images):
 
 DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
 experiment_name = 'kmnist'
-runs = OmegaConf.load(os.path.join(DIRPATH, 'runs.yaml'))
 
 table_dict = {}
 if experiment_name == 'kmnist':
     # gathering data
     for stddev in [0.05, 0.1]:
         for num_angles in [5, 10, 20, 30]:
-                for run_name in ['kmnist_mcdo_baseline.yaml']:
-                    runs = OmegaConf.load(os.path.join(DIRPATH, run_name))
-                    path_to_data = runs[num_angles][stddev]
-                    exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
-                    data = compute_test_image_metrics(path_to_data, exp_conf.num_images)
-                    table_dict[(num_angles, stddev)] = data
+            for run_name in ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline.yaml']:
+                runs = OmegaConf.load(os.path.join(DIRPATH, run_name))
+                path_to_data = runs[num_angles][stddev]
+                exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
+                data = compute_test_image_metrics(path_to_data, exp_conf.num_images)
+                table_dict[(run_name, num_angles, stddev)] = data
     # constructing table
+    rows = ['DIP-MCDO', 'DIP-SGLD']
     for stddev in [0.05, 0.1]:
         print(stddev)
-        table_psnr = 'PSNR: '
-        table_ssim = 'SSIM: '
-        for num_angles in [5, 10, 20, 30]:
-            table_psnr += '& ${:.2f}$'.format(table_dict[(num_angles, stddev)][0])
-            table_ssim += '& ${:.3f}$'.format(table_dict[(num_angles, stddev)][1])
-        table_psnr += ' \\\\'
-        table_ssim += ' \\\\'
-        print(table_psnr)
-        print(table_ssim)
+        table = ''
+        for row, run_name in zip(rows, ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline.yaml']): 
+            out_row = row
+            for num_angles in [5, 10, 20, 30]:
+                out_row += '& ${:.2f}$/${:.3f}$ '.format(table_dict[(run_name, num_angles, stddev)][0], table_dict[(run_name, num_angles, stddev)][1])
+            table += out_row + '\\\\ \n'
+        print(table)
 else: 
     raise NotImplementedError
-
-

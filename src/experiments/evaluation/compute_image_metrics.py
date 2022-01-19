@@ -46,15 +46,11 @@ if experiment_name == 'kmnist':
     # constructing table
     for stddev in [0.05, 0.1]:
         print(stddev)
-        table_psnr = 'PSNR: '
-        table_ssim = 'SSIM: '
+        table = ''
         for num_angles in [5, 10, 20, 30]:
-            table_psnr += '& ${:.2f}$'.format(table_dict[(num_angles, stddev)][0])
-            table_ssim += '& ${:.3f}$'.format(table_dict[(num_angles, stddev)][1])
-        table_psnr += ' \\\\'
-        table_ssim += ' \\\\'
-        print(table_psnr)
-        print(table_ssim)
+            table += '& ${:.2f}$/'.format(table_dict[(num_angles, stddev)][0])
+            table += '${:.3f}$'.format(table_dict[(num_angles, stddev)][1])
+        print(table)
 else: 
     raise NotImplementedError
 

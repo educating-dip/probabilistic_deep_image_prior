@@ -11,4 +11,4 @@ from .density import get_exact_predictive_cov_image_mat
 from .approx_density import predictive_image_log_prob, get_predictive_cov_image_block, predictive_image_block_log_prob, get_image_block_masks, stabilize_predictive_cov_image_block, predictive_image_log_prob_from_samples, approx_predictive_cov_image_block_from_samples
 from .opt_mrg_lik_obs_space import optim_marginal_lik_low_rank, clamp_params
 from .mc_pred_cp_loss import * 
-from .sample_based_approx_density import sample_from_posterior, approx_density_from_samples, approx_kernel_density
+from .sample_based_approx_density import sample_from_posterior, approx_density_from_samples, approx_kernel_density, approx_density_from_samples_mult_normal

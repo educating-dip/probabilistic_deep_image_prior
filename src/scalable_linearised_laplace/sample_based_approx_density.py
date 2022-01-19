@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from tqdm import tqdm
 from math import ceil 
 from sklearn.neighbors import KernelDensity
@@ -41,6 +42,19 @@ def approx_density_from_samples(recon, example_image, mc_sample_images, noise_x_
     std = ( torch.var(mc_sample_images.view(mc_samples, -1), dim=0) + noise_x_correction_term) **.5
     dist = torch.distributions.normal.Normal(recon.flatten(), std)
     return dist.log_prob(example_image.flatten()).sum()
+
+
+def approx_density_from_samples_mult_normal(recon, example_image, mc_sample_images, noise_x_correction_term=None):
+
+    mc_samples = mc_sample_images.shape[0]
+    assert noise_x_correction_term is not None
+    assert example_image.shape[1:] == mc_sample_images.shape[1:]
+
+    covariance_matrix = torch.cov(mc_sample_images.view(mc_samples, -1).T) 
+    covariance_matrix[np.diag_indices(covariance_matrix.shape[0])] += noise_x_correction_term
+
+    dist = torch.distributions.multivariate_normal.MultivariateNormal(loc=recon.flatten(), covariance_matrix=covariance_matrix)
+    return dist.log_prob(example_image.flatten())
 
 
 def approx_kernel_density(example_image, mc_sample_images, bw=0.1, noise_x_correction_term=None):

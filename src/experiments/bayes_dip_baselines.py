@@ -100,7 +100,7 @@ def coordinator(cfg : DictConfig) -> None:
                 sample_recon = sample_from_bayesianized_model(reconstructor.model, filtbackproj.to(reconstructor.device), mc_samples=num_samples)
                 mean = sample_recon.view(num_samples, -1).mean(dim=0)
                 std = ( torch.var(sample_recon.view(num_samples, -1), dim=0) + lik_hess_inv_diag_mean) **.5
-                log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_diag_mean.cpu()) / example_image.numel()
+                log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_diag_mean.cpu(), bw=cfg.baseline.bw) / example_image.numel()
             elif cfg.baseline.name == 'sgld':
                 iterations = int(cfg.net.optim.iterations)
                 cfg.net.optim.iterations = cfg.net.optim.iterations + (num_samples + 1) 
@@ -109,7 +109,7 @@ def coordinator(cfg : DictConfig) -> None:
                 num_samples = sample_recon.shape[0]
                 mean = sample_recon.view(num_samples, -1).mean(dim=0)
                 std = ( torch.var(sample_recon.view(num_samples, -1), dim=0) + lik_hess_inv_diag_mean.cpu()) **.5
-                log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_diag_mean.cpu()) / example_image.numel()
+                log_prob_kernel_density = approx_kernel_density(example_image, sample_recon.cpu(), noise_x_correction_term=lik_hess_inv_diag_mean.cpu(), bw=cfg.baseline.bw) / example_image.numel()
                 cfg.net.optim.iterations = iterations
 
             print('DIP reconstruction of sample {:d}'.format(i))
