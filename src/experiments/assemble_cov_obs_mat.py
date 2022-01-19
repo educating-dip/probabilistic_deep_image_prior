@@ -152,8 +152,8 @@ def coordinator(cfg : DictConfig) -> None:
                 map_location=reconstructor.device)['log_noise_model_variance_obs']
 
         if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization
-            clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
-            clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
+            clamp_params(bayesianized_model.gp_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
+            clamp_params(bayesianized_model.normal_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
 
         cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,

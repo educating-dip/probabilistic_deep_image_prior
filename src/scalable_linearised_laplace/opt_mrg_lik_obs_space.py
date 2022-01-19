@@ -107,8 +107,8 @@ def optim_marginal_lik_low_rank(
             optimizer.step()
 
             if cfg.mrglik.priors.clamp_variances:
-                clamp_params(bayesianized_model.gp_log_variances, min=-4.5)
-                clamp_params(bayesianized_model.normal_log_variances, min=-4.5)
+                clamp_params(bayesianized_model.gp_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
+                clamp_params(bayesianized_model.normal_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
 
             if (i+1) % 200 == 0:
                 torch.save(optimizer.state_dict(),
