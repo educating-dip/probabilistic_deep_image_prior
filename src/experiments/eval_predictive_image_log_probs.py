@@ -115,6 +115,15 @@ def coordinator(cfg : DictConfig) -> None:
 
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
+        block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx  # may be used to restrict to a subset of blocks
+        if block_idx_list is None:
+            block_idx_list = list(range(len(block_masks)))
+        else:
+            try:
+                block_idx_list = list(block_idx_list)
+            except TypeError:
+                block_idx_list = [block_idx_list]
+
         def get_method_name(load_cfg, optim_cfg):
             method_name_parts = []
             method_name_parts.append('tv_map' if optim_cfg.mrglik.optim.include_predcp else 'mll')
@@ -133,14 +142,14 @@ def coordinator(cfg : DictConfig) -> None:
             method_name = get_method_name(load_cfg, optim_cfg)
 
             blocks_found = []
-            for block_idx in range(len(block_masks)):
+            for block_idx in block_idx_list:
                 if os.path.isfile(os.path.join(load_path, 'predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))):
                     load_paths_per_block.setdefault(block_idx, {})
                     assert method_name not in load_paths_per_block[block_idx]
                     load_paths_per_block[block_idx][method_name] = load_path
                     blocks_found.append(block_idx)
-            blocks_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx in blocks_found]  # sort
-            blocks_not_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx not in blocks_found]
+            blocks_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx in blocks_found and block_idx in block_idx_list]  # sort
+            blocks_not_found = [block_idx for block_idx in load_cfg.density.compute_single_predictive_cov_block.block_idx if block_idx not in blocks_found and block_idx in block_idx_list]
             print('in path {}:'.format(load_path))
             print('  found blocks {}'.format(blocks_found))
             print('  missing blocks {}'.format(blocks_not_found))

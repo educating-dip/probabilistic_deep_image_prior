@@ -3,7 +3,7 @@ from itertools import islice
 import numpy as np
 import random
 import hydra
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
@@ -53,9 +53,10 @@ def coordinator(cfg : DictConfig) -> None:
         raise NotImplementedError
 
     assert cfg.density.compute_single_predictive_cov_block.load_path is not None, "no previous run path specified (density.compute_single_predictive_cov_block.load_path)"
-    assert cfg.density.compute_single_predictive_cov_block.block_idx is not None, "no block index specified (density.compute_single_predictive_cov_block.block_idx)"
+    # assert cfg.density.compute_single_predictive_cov_block.block_idx is not None, "no block index specified (density.compute_single_predictive_cov_block.block_idx)"
 
     load_path = cfg.density.compute_single_predictive_cov_block.load_path
+    load_cfg = OmegaConf.load(os.path.join(load_path, '.hydra', 'config.yaml'))
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if i < cfg.get('skip_first_images', 0):
@@ -77,10 +78,10 @@ def coordinator(cfg : DictConfig) -> None:
                 cfg.noise_specs
                 )
             sample_dict = torch.load(os.path.join(load_path, 'sample_{}.pt'.format(i)), map_location=example_image.device)
-            assert torch.allclose(sample_dict['filtbackproj'], filtbackproj)
-            # filtbackproj = sample_dict['filtbackproj']
-            # observation = sample_dict['observation']
-            # example_image = sample_dict['ground_truth']
+            assert torch.allclose(sample_dict['filtbackproj'], filtbackproj, atol=1e-7)
+            filtbackproj = sample_dict['filtbackproj']
+            observation = sample_dict['observation']
+            example_image = sample_dict['ground_truth']
         elif cfg.name == 'walnut':
             observation, filtbackproj, example_image = data_sample
         else:
@@ -95,7 +96,8 @@ def coordinator(cfg : DictConfig) -> None:
 
         if cfg.name in ['mnist', 'kmnist']:
             # model from previous run
-            path = os.path.join(load_path, 'dip_model_{}.pt'.format(i))
+            dip_load_path = load_path if load_cfg.load_dip_models_from_path is None else load_cfg.load_dip_models_from_path
+            path = os.path.join(dip_load_path, 'dip_model_{}.pt'.format(i))
         elif cfg.name == 'walnut':
             # fine-tuned model
             path = os.path.join(get_original_cwd(), reconstructor.cfg.finetuned_params_path 
@@ -242,11 +244,14 @@ def coordinator(cfg : DictConfig) -> None:
         # compute predictive image log prob for blocks
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
-        block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx
-        try:
-            block_idx_list = list(block_idx_list)
-        except TypeError:
-            block_idx_list = [block_idx_list]
+        block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx  # may be used to restrict to a subset of blocks
+        if block_idx_list is None:
+            block_idx_list = list(range(len(block_masks)))
+        else:
+            try:
+                block_idx_list = list(block_idx_list)
+            except TypeError:
+                block_idx_list = [block_idx_list]
 
         errors = []
         for block_idx in block_idx_list:
