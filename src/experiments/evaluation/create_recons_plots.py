@@ -1,107 +1,87 @@
+import sys
+sys.path.append('../')
+
 import os
 import numpy as np 
-import bios
 import numpy as np
+import torch
+import tensorly as tl
+tl.set_backend('pytorch')
 import matplotlib
+import scipy.stats
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
+from omegaconf import OmegaConf
+from deep_image_prior.utils import PSNR, SSIM
+from dataset.utils import get_standard_ray_trafos
+from dataset import extract_trafos_as_matrices
 
-DIR_PATH='/media/chen/Res/dip_bayesian_ext/src/experiments' 
+DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
 
-run_paths = bios.read(os.path.join(DIR_PATH, 'evaluation/runs.yaml'))
-name = 'kmnist_sparse_10' # kmnist_sparse_20
-idx = 0 # [0, 1]
-exp_name = 'calibration_uncertainty_estimates'
+set_xlim_dict = {
+    (5, 0.05): 0.90, 
+    (5, 0.1): 0.95, 
+    (10, 0.05): 0.45, 
+    (10, 0.1): 0.6,
+    (20, 0.05): 0.25,
+    (20, 0.1): 0.35, 
+    (30, 0.05): 0.25,
+    (30, 0.1): 0.25
+}
 
 dic = {'images':
-        {   'num': 10, 
-            'n_rows': 2,
-            'n_cols': 4,
-            'figsize': (7.25, 3.5),
-            'idx_to_norm': [4, 6],
-            'idx_add_cbar': [2, 6],
-            'idx_add_psnr': [1, 2],
-            'idx_add_min_max': [4, 5, 6], 
-            'idx_add_test_loglik': [5, 6],
-            'idx_hist_insert': [3, 7],
-            'idx_remove_ticks': [3],
-            'text_insert':
-            {
-                'psnr': [5.75, 29], 
-                'min_max': [-2, 14.75], 
-                'test_loglik': [12, 29], 
-                'fontsize': 7.5,
-            }
+        {   
+            'num': 50, 
+            'n_rows': 3,
+            'n_cols': 6,
+            'figsize': (14, 7),
+            'idx_to_norm': [2, 3, 4],
+            'idx_vmax_vmin_1_0': [0, 1, 6, 7, 13],
+            'idx_add_cbar': [4, 8, 9, 14, 15],
+            'idx_add_psnr': [1, 7, 13],
+            'idx_add_qq_plot': [10, 16],
+            'add_lateral_title': {1: 'Bayes DIP', 7: 'DIP-MCDO', 13: 'DIP-SGLD', 3: 'MLL', 4:'TV-MAP', 'idx': [1, 3, 4, 7, 13]}, 
+            'idx_add_test_loglik': [3, 4, 9, 15],
+            'idx_test_log_lik': {3:0, 4:1, 9:2, 15:3},
+            'idx_hist_insert': [5, 11, 17],
+            'idx_remove_ticks': [5, 11,],
         },
-    'hist': {
+        'hist': 
+        {
             'num_bins': 25,
             'num_k_retained': 5, 
             'opacity': [0.3, 0.3, 0.3], 
             'zorder': [10, 5, 0],
-            'color': ['#e63946', '#ee9b00', '#606c38'], 
+            'color': {5: ['#e63946', '#35DCDC', '#5A6C17'], 11:['#e63946', '#EE9B00'], 17:['#e63946', '#781C68']}, 
             'linewidth': 0.75, 
-            },
-    'eigenUQ': 
-    {
-        'n_rows': 2,
-        'n_cols': 5,
-            
-    }
+            }, 
+        'qq': 
+        {
+            'zorder': [10, 5, 0],
+            'color': {10: ['#35DCDC', '#5A6C17', '#EE9B00'], 16:  ['#35DCDC', '#5A6C17', '#781C68']},
+            }
 }
 
-def create_eigs_uncertainty_subplots(v_mll, v_map, filename):
+def create_qq_plot(ax, data, label_list, title='', color_list=None, legend_kwargs=None):
+    qq_xintv = [np.min(data[0][0]), np.max(data[0][0])]
+    ax.plot(qq_xintv, qq_xintv, color='k', linestyle='--')
+    if color_list is None:
+        color_list = dic['qq']['color'][-1]
+    for (osm, osr), label, color, zorder in zip(data, label_list, color_list, dic['hist']['zorder']):
+        ax.plot(osm, osr, label=label, alpha=0.75, zorder=zorder, linewidth=1.75, color=color)
+    abs_ylim = max(map(abs, ax.get_ylim()))
+    ax.set_ylim(-abs_ylim, abs_ylim)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    ax.legend(**(legend_kwargs or {}), loc='lower right')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    fs_m1 = 6  # for figure ticks
+
+def kmnist_image_fig_subplots(data, loglik, filename, titles):
+
+    fs_m1 = 8  # for figure ticks
     fs = 10  # for regular figure text
-    fs_p1 = 15  #  figure titles
-
-    matplotlib.rc('font', size=fs)          # controls default text sizes
-    matplotlib.rc('axes', titlesize=fs)     # fontsize of the axes title
-    matplotlib.rc('axes', labelsize=fs)    # fontsize of the x and y labels
-    matplotlib.rc('xtick', labelsize=fs_m1)    # fontsize of the tick labels
-    matplotlib.rc('ytick', labelsize=fs_m1)    # fontsize of the tick labels
-    matplotlib.rc('legend', fontsize=fs_m1)    # legend fontsize
-    matplotlib.rc('figure', titlesize=fs_p1)  # fontsize of the figure title
-
-    matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
-    matplotlib.rc('text', usetex=True)
-    matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
-
-    fig, axs = plt.subplots(dic['eigenUQ']['n_rows'], dic['eigenUQ']['n_cols'],
-        figsize=(8, 3), gridspec_kw = {'wspace':0, 'hspace':0}, facecolor='w', edgecolor='k', constrained_layout=True)
-    axs = axs.flatten()
-    for i in range(v_mll.shape[1]):
-        if i == 0:
-            axs[i].text(-6.5, 14, 
-                'MLL', rotation=90, horizontalalignment='center', 
-                verticalalignment='center', color='black')
-
-        axs[i].set_title('v$_{}$'.format(i), y=1.15)
-        im = axs[i].imshow(v_mll[:, i].reshape(28,28),
-            vmin=-np.max(np.abs(v_mll)), vmax=np.max(np.abs(v_mll)), cmap='RdGy')
-        axs[i].set_axis_off()
-
-    shift = v_mll.shape[1]
-    for i in range(v_map.shape[1]):
-        if i == 0:
-            axs[i + shift].text(-6.5, 14, 
-                'Type-II MAP', rotation=90, horizontalalignment='center', 
-                verticalalignment='center', color='black')
-        im = axs[i + shift].imshow(v_map[:, i].reshape(28,28), 
-            vmin=-np.max(np.abs(v_map)), vmax=np.max(np.abs(v_map)), cmap='RdGy')
-        axs[i + shift].set_axis_off()
-
-    cb = fig.colorbar(im, ax=[axs[2], axs[-1]], shrink=0.95, aspect=40)
-    cb.ax.locator_params(nbins=10)
-
-    fig.savefig(filename + '.png', dpi=600)
-    fig.savefig(filename + '.pdf')
-
-def main_image_fig_subplots(data, loglik, filename, titles):
-
-    fs_m1 = 6  # for figure ticks
-    fs = 10  # for regular figure text
-    fs_p1 = 15  #  figure titles
+    fs_p1 = 24 #  figure titles
 
     matplotlib.rc('font', size=fs)          # controls default text sizes
     matplotlib.rc('axes', titlesize=fs)     # fontsize of the axes title
@@ -113,52 +93,68 @@ def main_image_fig_subplots(data, loglik, filename, titles):
 
     matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
     matplotlib.rc('text', usetex=True)
-    matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+    matplotlib.rcParams['text.latex.preamble']=r'\usepackage{amsmath}'
 
     fig, axs = plt.subplots(dic['images']['n_rows'], dic['images']['n_cols'], figsize=dic['images']['figsize'],
           facecolor='w', edgecolor='k', constrained_layout=True)
-    vmax = np.max(data[dic['images']['idx_to_norm'][0]:dic['images']['idx_to_norm'][1]])
-    vmin = np.min(data[dic['images']['idx_to_norm'][0]:dic['images']['idx_to_norm'][1]])
-    k = 0 
+    
     for i, (el, ax, title) in enumerate(zip(data, axs.flatten(), titles)):
         if i in dic['images']['idx_hist_insert']:
             kws = dict(histtype= "stepfilled", linewidth = dic['hist']['linewidth'], ls='dashed', density=True)
             for (el, alpha, zorder, color, label) in zip(el[0], dic['hist']['opacity'], 
-                dic['hist']['zorder'], dic['hist']['color'], el[1]):
+                dic['hist']['zorder'], dic['hist']['color'][i], el[1]):
                     ax.hist(el.flatten(), bins=dic['hist']['num_bins'], zorder=zorder,
                         facecolor=hex_to_rgb(color, alpha), edgecolor=hex_to_rgb(color, alpha=1), label=label, **kws)
             ax.set_title(title, y=1.01)
-            ax.set_xlim([0, 0.65])
+            ax.set_xlim([0, set_xlim_dict[(num_angles, stddev)]])
             ax.set_ylim([0.09, 90])
             ax.set_yscale('log')
             ax.legend()
             ax.grid(alpha=0.3)
             if i in dic['images']['idx_remove_ticks']: 
                 ax.set_xticklabels([' ', ' ', ' ', ' '])
+        elif i in dic['images']['idx_add_qq_plot']:
+            osm_mll, osr_mll = scipy.stats.probplot(el[0].flatten(), fit=False)
+            osm_map, osr_map = scipy.stats.probplot(el[1].flatten(), fit=False)
+            osm_baseline, osr_baseline = scipy.stats.probplot(el[2].flatten(), fit=False)
+            create_qq_plot(ax,
+                [(osm_mll, osr_mll), (osm_map, osr_map), (osm_baseline, osr_baseline)],
+                ['Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'DIP-MCDO'] if i == 10 else ['Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'DIP-SGLD'],
+                title=title, color_list=dic['qq']['color'][i])
+            ax.set_aspect(np.diff(ax.get_xlim())/np.diff(ax.get_ylim()))
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            if i == dic['images']['idx_add_qq_plot'][0]: 
+                ax.set_xticklabels([' ', ' ', ' ', ' '])
         else:
-            im = ax.imshow(el, cmap='gray', vmin=0, vmax=1) if i < dic['images']['idx_to_norm'][0] \
-                else ax.imshow(el, cmap='gray', vmin=vmin, vmax=vmax)
-            ax.set_axis_off()
+            if i in dic['images']['idx_vmax_vmin_1_0']: 
+                im = ax.imshow(el, cmap='gray', vmin=0, vmax=1) 
+            if i in dic['images']['idx_to_norm']:
+                vmax = np.max(data[dic['images']['idx_to_norm'][0]:dic['images']['idx_to_norm'][-1]])
+                vmin = np.min(data[dic['images']['idx_to_norm'][0]:dic['images']['idx_to_norm'][-1]])
+                im = ax.imshow(el, cmap='gray', vmin=vmin, vmax=vmax)
+            else:
+                im = ax.imshow(el, cmap='gray', )
             ax.set_title(title)
+            if i in dic['images']['add_lateral_title']['idx']:
+                ax.set_ylabel(dic['images']['add_lateral_title'][i])
+        
+            ax.axes.xaxis.set_ticks([])
+            ax.axes.yaxis.set_ticks([])
             if i in dic['images']['idx_add_cbar']: 
-                fig.colorbar(im, ax=ax, shrink=0.95)
-            
-            if i in dic['images']['idx_add_psnr']: 
-                psnr = 10 * np.log10( 1 / np.mean( (data[0].flatten() - el.flatten()) **2))
-                ax.text(dic['images']['text_insert']['psnr'][0], dic['images']['text_insert']['psnr'][1], 
-                    'psnr: {:.4f}'.format(psnr), horizontalalignment='center', verticalalignment='center', 
-                        color='black', fontsize=dic['images']['text_insert']['fontsize'])
-
-            if i in dic['images']['idx_add_min_max']: 
-                ax.text(dic['images']['text_insert']['min_max'][0], dic['images']['text_insert']['min_max'][1], 
-                    'max: {:.1e}, min: {:.1e}'.format(el.max(), el.min()), rotation=90, horizontalalignment='center', 
-                    verticalalignment='center', color='black', fontsize=dic['images']['text_insert']['fontsize'])
+                fig.colorbar(im, ax=ax, shrink=0.90)
+                
+            if i in dic['images']['idx_add_psnr']:
+                psnr = PSNR(el.flatten(), data[0].flatten())
+                ssim = SSIM(el.flatten(), data[0].flatten())
+                s_psnr = 'PSNR: ${:.3f}$\\,dB'.format(psnr)
+                s_ssim = 'SSIM: ${:.4f}$'.format(ssim)
+                ax.set_xlabel(s_psnr + ';\;' + s_ssim)
+    
             if i in dic['images']['idx_add_test_loglik']:
-                ax.text(dic['images']['text_insert']['test_loglik'][0], dic['images']['text_insert']['test_loglik'][1], 
-                    'test log-likelihood: {:.4f}'.format(loglik[k]), horizontalalignment='center', verticalalignment='center',
-                    color='black', fontsize=dic['images']['text_insert']['fontsize'])
-                k += 1
-    fig.savefig(filename + '.png', dpi=600)
+                ax.set_xlabel('log-likelihood: ${:.4f}$'.format(loglik[dic['images']['idx_test_log_lik'][i]]))
+
+    fig.savefig(filename + '.png', dpi=100)
     fig.savefig(filename + '.pdf')
 
 def hex_to_rgb(value, alpha):
@@ -168,161 +164,110 @@ def hex_to_rgb(value, alpha):
     out = [el / 255 for el in out] + [alpha]
     return tuple(out) 
 
-def create_hist_plot(data, filename, label_list, title, remove_ticks=False):
-
-    fs_m1 = 6  # for figure ticks
-    fs = 8  # for regular figure text
-    fs_p1 = 9  #  figure titles
-
-    matplotlib.rc('font', size=fs)          # controls default text sizes
-    matplotlib.rc('axes', titlesize=fs)     # fontsize of the axes title
-    matplotlib.rc('axes', labelsize=fs)    # fontsize of the x and y labels
-    matplotlib.rc('xtick', labelsize=fs_m1)    # fontsize of the tick labels
-    matplotlib.rc('ytick', labelsize=fs_m1)    # fontsize of the tick labels
-    matplotlib.rc('legend', fontsize=fs_m1)    # legend fontsize
-    matplotlib.rc('figure', titlesize=fs_p1)  # fontsize of the figure title
-    matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
-    matplotlib.rc('text', usetex=True)
-    matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
-
-    fig, axs = plt.subplots(1, 1, figsize=(2,2),  facecolor='w', 
-        edgecolor='k', constrained_layout=True)
-
-    kws = dict(histtype= "stepfilled", linewidth = dic['hist']['linewidth'], ls='dashed', density=True)
-    for (el, alpha, zorder, color, label) in zip(data, dic['hist']['opacity'], 
-        dic['hist']['zorder'], dic['hist']['color'], label_list):
-            axs.hist(el.flatten(), bins=dic['hist']['num_bins'], zorder=zorder,
-                 facecolor=hex_to_rgb(color, alpha), edgecolor=hex_to_rgb(color, alpha=1), label=label, **kws)
-    axs.set_title(title, y=1.01)
-    axs.set_xlim([0, 0.65])
-    axs.set_ylim([0.09, 90])
-    axs.grid(alpha=0.3)
-    axs.legend()
-    axs.set_yscale('log')
-    if remove_ticks: 
-        axs.set_xticklabels([' ', ' ', ' ', ' '])
-    fig.savefig(filename + '.png', dpi=600)
-    fig.savefig(filename + '.pdf')
-
-
-def collect_test_log_lik(path, idx):
-  
-    test_log_lik_info = np.load(os.path.join(DIR_PATH, path, \
-        'test_log_lik_info_{}.npz'.format(idx)), allow_pickle=True)
-    return (test_log_lik_info['test_log_lik'].item()['MLL'], \
-        test_log_lik_info['test_log_lik'].item()['type-II-MAP'] )
-
-def collect_reconstruction_data(path, idx):
+def gather_data_from_bayes_dip(idx):
     
-    data = np.load(os.path.join(DIR_PATH, path, 'recon_info_{}.npz'.format(idx)))
+    runs = OmegaConf.load(os.path.join(DIRPATH, 'runs.yaml'))
+    path_to_data = runs.kmnist[num_angles][stddev][0]['path'] # selecting first run in yaml file [0]
+    recon_data = np.load(os.path.join(path_to_data, 'recon_info_{}.npz'.format(idx)),  allow_pickle=True)
+    log_lik_data = np.load(os.path.join(path_to_data, 'test_log_lik_info_{}.npz'.format(idx)),  allow_pickle=True)['test_log_lik'].item()
 
-    image = \
-        data['image'].squeeze()
-    filtbackproj = \
-        data['filtbackproj'].squeeze()
-    recon = \
-        data['recon'].squeeze()
-    abs_error = \
-        np.abs(image - recon).squeeze()
+    example_image = recon_data['image'].squeeze()
+    filtbackproj = recon_data['filtbackproj'].squeeze()
+    observation = recon_data['observation'].squeeze()
+    recon = recon_data['recon'].squeeze()
+    abs_error = np.abs(example_image - recon)
+    pred_cov_matrix_mll = recon_data['model_post_cov_no_predcp']
+    pred_cov_matrix_tv_map = recon_data['model_post_cov_predcp']
+    std_pred_mll = np.sqrt(np.diag(pred_cov_matrix_mll)).reshape(28, 28)
+    std_pred_tv_map = np.sqrt(np.diag(pred_cov_matrix_tv_map)).reshape(28, 28)
     
-    try: 
-        model_cov_matrix_mll = \
-            data['model_post_cov_no_predCP']
-    except: 
-        model_cov_matrix_mll = \
-            data['model_post_cov_no_PredCP']
+    return (example_image, filtbackproj, observation, recon, abs_error, std_pred_mll, std_pred_tv_map,
+                pred_cov_matrix_mll, pred_cov_matrix_tv_map, log_lik_data['test_loglik_MLL'], log_lik_data['test_loglik_type-II-MAP'])
 
-    model_cov_matrix_map = \
-        data['model_post_cov_w_PredCP']
-    std_pred_mll = \
-        np.sqrt(np.diag(model_cov_matrix_mll)).reshape(28, 28)
-    std_pred_map = \
-        np.sqrt(np.diag(model_cov_matrix_map)).reshape(28, 28)
-    try: 
-        Kxx_mll = data['Kxx_no_PredCP']
-        Kxx_map = data['Kxx_w_PredCP']
-    except:
-        Kxx_mll = None 
-        Kxx_map = None 
 
-    return (image, filtbackproj, recon, abs_error, std_pred_mll, std_pred_map,
-                model_cov_matrix_mll, model_cov_matrix_map, Kxx_mll, Kxx_map)
- 
-def extract_eigenvectors(data, k):
+def estimate_noise_in_x(cfg):
+    
+    ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=False, return_op_mat=True)
+    trafos = extract_trafos_as_matrices(ray_trafos)
+    trafo = trafos[0]
+    trafo_T_trafo = trafo.T @ trafo
+    U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
+    lik_hess_inv_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T).diag().mean() 
+    return lik_hess_inv_diag_mean.numpy()
 
-    s, v = np.linalg.eigh(data)
-    lev_score = ( (v[:, -10:])**2 ).sum(axis=1) 
-    lev_score = ( lev_score - np.min(lev_score) ) / ( np.max(lev_score) - np.min(lev_score) )
-    return np.sqrt(s), v[:, -k:], lev_score.reshape(28, 28)
 
-if __name__ == "__main__": 
+def gather_data_from_baseline_dip(idx, run_path):
+    
+    runs = OmegaConf.load(os.path.join(DIRPATH, run_path))
+    path_to_data = runs[num_angles][stddev]
+    conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
+    noise_in_x = estimate_noise_in_x(conf)
+    data = np.load(os.path.join(path_to_data, 'recon_info_{}.npz'.format(idx)),  allow_pickle=True)
 
-    for i in range(dic['images']['num']):
+    example_image = data['image'].squeeze()
+    recon = data['recon'].squeeze().reshape(28, 28)
+    abs_error = np.abs(example_image - recon)
+    std_pred = np.clip(data['std'].reshape(28, 28) ** 2 - noise_in_x, a_min=0, a_max=np.inf) **.5
+    return (recon, abs_error, std_pred, data['test_log_likelihood'].item())
 
-        name_dir, path_to_data = run_paths[exp_name][name][idx]['name'], \
-            run_paths[exp_name][name][idx]['path']
-        (
-        image, filtbackproj, recon, abs_error, std_pred_mll, std_pred_map,
-            covariance_matrix_mll, covariance_matrix_map, Kxx_mll, Kxx_map
-        ) = \
-        collect_reconstruction_data(
-            path_to_data,
-            i
-            )
-        LL_mll, LL_map = collect_test_log_lik(path_to_data, i)
-        s_mll, v_mll, lev_score_mll = extract_eigenvectors(
-            covariance_matrix_mll, 
-            dic['hist']['num_k_retained']
-            )
-        s_map, v_map, lev_score_map = extract_eigenvectors(
-            covariance_matrix_map,
-            dic['hist']['num_k_retained']
-            )
+def normalized_error_for_qq_plot(recon, image, std):
+    normalized_error = (recon - image) / std
+    return normalized_error
 
-        images_dir = os.path.join('./', name_dir, 'images')
+if __name__ == "__main__":
 
-        if not os.path.isdir(images_dir):
-            os.makedirs(images_dir)
 
-        # create_eigs_uncertainty_subplots(
-        #     v_mll, 
-        #     v_map, 
-        #     images_dir + '/eigs_plot_{}'.format(i)
-        #     )
+    for angles in [5, 10, 20, 30]:
+        for noise in [0.05, 0.1]: 
+            global num_angles
+            num_angles = angles
+            global stddev
+            stddev = noise
 
-        main_image_fig_subplots( 
-            (
-            image, filtbackproj, recon, 
-                (
-                    (abs_error, std_pred_mll, std_pred_map),  
-                    ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev (MLL)', 'std-dev  (Type-II MAP)']
-                ),
-            abs_error, std_pred_mll, std_pred_map, 
-            (
-                (abs_error, s_mll, s_map),
-                ['$|{\mathbf{x} - \mathbf{x}^*}|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ (MLL)',
-                '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$  (Type-II MAP)'])
-            ),
-            (LL_mll, LL_map),
-            images_dir + '/main_{}'.format(i), 
-            ['${\mathbf{x}}$', 'FBP (i.e.\ ${\\textnormal{A}}^\dagger y_{\delta})$', 
-            '${\mathbf{x}^*}$', 'marginal std-dev', '${|\mathbf{x} - \mathbf{x}^*|}$', 
-            'std-dev  (MLL)', 'std-dev (Type-II MAP)', 'covariance eigenspectrum']
-            )
+            for idx in range(dic['images']['num']):
 
-        # create_hist_plot( 
-        #     (abs_error, std_pred_mll, std_pred_map), 
-        #     images_dir + '/histogram_{}'.format(i), 
-        #     ['$|x - x^*|$', 'std -- MLL', 'std -- Type-II MAP'], 
-        #     'marginal std',
-        #     True
-        #     )
+                (example_image, filtbackproj, observation, recon, abs_error, std_pred_mll, std_pred_tv_map,
+                        pred_cov_matrix_mll, pred_cov_matrix_map, test_log_lik_mll, test_log_lik_tv_map) = gather_data_from_bayes_dip(idx)
+                folder_name = 'kmnist_num_angles_{}_stddev_{}'.format(num_angles, stddev)
+                dir_path = os.path.join('./', 'images', folder_name)
 
-        # create_hist_plot( 
-        #     (abs_error, s_mll, s_map), 
-        #     images_dir + '/histogram_eigs_{}'.format(i), 
-        #     ['$|x - x^*|$', '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- MLL',
-        #         '$\lambda(\Sigma_{\mathbf{f}|\mathbf{y}_{\delta}})^{0.5}$ -- Type-II MAP'], 
-        #     'eigenspectrum', 
-        #     False
-        #     )
+                (mcdo_recon, mcdo_abs_error, mcdo_std_pred, mcdo_test_log_lik) = gather_data_from_baseline_dip(idx, 'kmnist_mcdo_baseline_bw_005.yaml')
+                (sgld_recon, sgld_abs_error, sgld_std_pred, sgld_test_log_lik) = gather_data_from_baseline_dip(idx, 'kmnist_sgld_baseline_bw_005.yaml')
+
+                if not os.path.isdir(dir_path):
+                    os.makedirs(dir_path)
+
+                qq_err_mll = normalized_error_for_qq_plot(recon, example_image, std_pred_mll)
+                qq_err_map = normalized_error_for_qq_plot(recon, example_image, std_pred_tv_map)
+                qq_err_mcdo = normalized_error_for_qq_plot(mcdo_recon, example_image, mcdo_std_pred)
+                qq_err_sgld = normalized_error_for_qq_plot(sgld_recon, example_image, sgld_std_pred)
+
+                kmnist_image_fig_subplots( 
+                    (
+                    example_image, recon, abs_error, std_pred_mll, std_pred_tv_map, 
+                    (
+                        (abs_error, std_pred_mll, std_pred_tv_map),
+                        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev (MLL)', 'std-dev (TV-MAP)']
+                    ),
+                    filtbackproj,
+                    mcdo_recon, mcdo_abs_error, mcdo_std_pred,
+                    ( qq_err_mll, qq_err_map, qq_err_mcdo) , 
+                    (
+                            (mcdo_abs_error, mcdo_std_pred),  
+                            ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'DIP-MCDO']
+                    ),
+                    np.transpose(observation),
+                    sgld_recon, sgld_abs_error, sgld_std_pred,
+                    ( qq_err_mll, qq_err_map, qq_err_sgld), 
+                    (
+                            (sgld_abs_error, sgld_std_pred),  
+                            ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'DIP-SGLD']
+                    )
+                    ),
+                    (test_log_lik_mll, test_log_lik_tv_map, mcdo_test_log_lik, sgld_test_log_lik),
+                    dir_path + '/main_{}'.format(idx), 
+                    ['${\mathbf{x}}$','${\mathbf{x}^*}$', '${|\mathbf{x} - \mathbf{x}^*|}$', 
+                    'std-dev', 'std-dev',  'marginal std-dev','FBP (i.e.\ ${\\textnormal{A}}^\dagger \mathbf{y}_{\delta})$', '',
+                    '', '', 'Calibration: Q-Q', '',
+                    '$\mathbf{y}_{\delta}$', '', '', '', '', '']
+                    )

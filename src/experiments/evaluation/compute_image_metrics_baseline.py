@@ -34,7 +34,7 @@ if experiment_name == 'kmnist':
     # gathering data
     for stddev in [0.05, 0.1]:
         for num_angles in [5, 10, 20, 30]:
-            for run_name in ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline.yaml']:
+            for run_name in ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline_bw_005.yaml']:
                 runs = OmegaConf.load(os.path.join(DIRPATH, run_name))
                 path_to_data = runs[num_angles][stddev]
                 exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
@@ -45,7 +45,7 @@ if experiment_name == 'kmnist':
     for stddev in [0.05, 0.1]:
         print(stddev)
         table = ''
-        for row, run_name in zip(rows, ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline.yaml']): 
+        for row, run_name in zip(rows, ['kmnist_mcdo_baseline.yaml','kmnist_sgld_baseline_bw_005.yaml']): 
             out_row = row
             for num_angles in [5, 10, 20, 30]:
                 out_row += '& ${:.2f}$/${:.3f}$ '.format(table_dict[(run_name, num_angles, stddev)][0], table_dict[(run_name, num_angles, stddev)][1])
