@@ -13,7 +13,7 @@ PROJ_COL_SUB_SAMPLING = 6
 
 num_proj_cols = ceil(PROJS_COLS / PROJ_COL_SUB_SAMPLING)
 
-WALNUT_ID = 2
+WALNUT_ID = 1
 ORBIT_ID = 2
 
 DATA_PATH = 'walnuts/'

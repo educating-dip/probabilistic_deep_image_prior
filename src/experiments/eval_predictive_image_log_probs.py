@@ -22,8 +22,8 @@ from scalable_linearised_laplace import (
         get_image_block_masks)
 
 ### Evaluates the results from a set of runs of
-### ``compute_single_predictive_cov_block.py`` (specified via
-### `density.eval_predictive_image_log_probs.load_path_list`).
+### ``compute_single_predictive_cov_block.py`` or ``estimate_density_from_samples.py``
+### (specified via `density.eval_predictive_image_log_probs.load_path_list`).
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -126,7 +126,7 @@ def coordinator(cfg : DictConfig) -> None:
 
         def get_method_name(load_cfg, optim_cfg):
             method_name_parts = []
-            method_name_parts.append('tv_map' if optim_cfg.mrglik.optim.include_predcp else 'mll')
+            method_name_parts.append('tv_map_{}'.format(optim_cfg.mrglik.optim.scaling_fct) if optim_cfg.mrglik.optim.include_predcp else 'mll')
             return '_'.join(method_name_parts)
 
         load_paths_per_block = {}

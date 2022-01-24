@@ -20,12 +20,13 @@ from scalable_linearised_laplace import get_image_block_masks
 DIR_PATH='/localdata/jleuschn/experiments/dip_bayesian_ext/'
 IMAGES_DIR='./images_walnut'
 
-# run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
-run_path_mll = 'outputs/2022-01-20T11:29:58.458635Z'  # no sigma_y override, Kyy eps abs 0.1
+run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
+# run_path_mll = 'outputs/2022-01-20T11:29:58.458635Z'  # no sigma_y override, Kyy eps abs 0.1
 
 # run_path_map = 'outputs/2022-01-18T22:32:09.051642Z'  # Kyy eps rel 1e-5
-# run_path_map = 'outputs/2022-01-18T22:34:13.511015Z'  # Kyy eps abs 0.15661916026566242
-run_path_map = 'outputs/2022-01-20T11:34:15.385454Z'  # no sigma_y override, Kyy eps abs 0.1
+run_path_map = 'outputs/2022-01-18T22:34:13.511015Z'  # Kyy eps abs 0.15661916026566242
+# run_path_map = 'outputs/2022-01-20T11:34:15.385454Z'  # no sigma_y override, Kyy eps abs 0.1
+# run_path_map = 'outputs/2022-01-24T00:26:29.402003Z'
 
 run_path_mcdo = 'outputs/2022-01-18T19:06:20.999879Z'
 
@@ -120,13 +121,14 @@ def create_hist_plot(ax, data, label_list, title, remove_ticks=False, color_list
             ax.hist(el.flatten(), bins=dic['hist']['num_bins'], zorder=zorder,
                  facecolor=hex_to_rgb(color, alpha), edgecolor=hex_to_rgb(color, alpha=1), label=label, **kws)
     ax.set_title(title)
-    ax.set_xlim([0, 1.])
+    ax.set_xlim([0, 1.15])
     ax.set_ylim([2e-4, 150])
     ax.grid(alpha=0.3)
     ax.legend(**(legend_kwargs or {}))
     ax.set_yscale('log')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.set_ylabel('density', labelpad=2)
     if remove_ticks: 
         ax.set_xticklabels([' '] * len(ax.get_xticklabels()))
 
@@ -166,7 +168,7 @@ def create_image_plot(fig, ax, image, title='', vmin=None, vmax=None, cmap='gray
         ([START_0 - thickness, START_1 - thickness], thickness, END_1+1-START_1 + 2*thickness),
         ([END_0+1, START_1 - thickness], thickness, END_1+1-START_1 + 2*thickness)]
     for rect_part in rect_parts:
-        rect = matplotlib.patches.Rectangle(*rect_part, fill=True, color='#00a1f2', edgecolor=None)
+        rect = matplotlib.patches.Rectangle(*rect_part, fill=True, color='#ffffff', edgecolor=None)
         ax.add_patch(rect)
     return im
 
@@ -177,7 +179,7 @@ def add_colorbar(fig, ax, im):
     cax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(4))
     return cb
 
-def add_inset(fig, ax, image, axes_rect, rect, cmap='gray', vmin=None, vmax=None, interpolation=None, frame_color='#cc0000', frame_path=None, clip_path_closing=None, mark_in_orig=False, origin='upper'):
+def add_inset(fig, ax, image, axes_rect, rect, cmap='gray', vmin=None, vmax=None, interpolation=None, frame_color='#aa0000', frame_path=None, clip_path_closing=None, mark_in_orig=False, origin='upper'):
     ip = InsetPosition(ax, axes_rect)
     axins = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
     axins.set_axes_locator(ip)
@@ -286,7 +288,7 @@ def collect_reconstruction_data(path, cfg, ray_trafos):
 
     return (image, observation_2d, filtbackproj, recon, abs_error)
 
-def collect_mcdo_data(path, cfg, block_idx_list, all_block_mask_inds):
+def collect_mcdo_data(path, cfg, block_idx_list, all_block_mask_inds, noise_correction_term=0.):
 
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True, return_op_mat=True)
 
@@ -306,7 +308,7 @@ def collect_mcdo_data(path, cfg, block_idx_list, all_block_mask_inds):
     std_mcdo = np.full(np.prod(IM_SHAPE), np.nan)
 
     for mask_inds, block_diag in zip(predictive_image_log_prob_dict['block_mask_inds'], predictive_image_log_prob_dict['block_diags']):
-        std_mcdo[mask_inds] = block_diag.cpu().numpy()**0.5
+        std_mcdo[mask_inds] = np.clip(block_diag.cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
 
     requested_block_mask_inds = [mask_inds for block_idx, mask_inds in enumerate(all_block_mask_inds) if block_idx in block_idx_list]
     # loaded data should be exactly what is requested with block_idx_list
@@ -316,7 +318,7 @@ def collect_mcdo_data(path, cfg, block_idx_list, all_block_mask_inds):
 
     return (log_lik, recon_mcdo, abs_error_mcdo, std_mcdo.reshape(IM_SHAPE))
 
-def collect_dip_bayes_data(path, cfg, block_idx_list, all_block_mask_inds):
+def collect_dip_bayes_data(path, cfg, block_idx_list, all_block_mask_inds, noise_correction_term=0.):
 
     std = np.full(np.prod(IM_SHAPE), np.nan)
 
@@ -326,7 +328,7 @@ def collect_dip_bayes_data(path, cfg, block_idx_list, all_block_mask_inds):
             continue
         predictive_image_log_prob_block_dict = torch.load(os.path.join(DIR_PATH, path, 'predictive_image_log_prob_block{}_0.pt'.format(block_idx)))
         assert np.array_equal(mask_inds, predictive_image_log_prob_block_dict['mask_inds'])
-        std[mask_inds] = predictive_image_log_prob_block_dict['block_diag'].cpu().numpy()**0.5
+        std[mask_inds] = np.clip(predictive_image_log_prob_block_dict['block_diag'].cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
         block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'].item())
 
     log_lik = np.sum(block_log_probs) / (len(block_idx_list) * BLOCK_SIZE**2)
@@ -370,7 +372,7 @@ def plot_walnut(cfg):
     assert cfg.density.block_size_for_approx == BLOCK_SIZE
 
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-20T00:56:37.631314Z'  # TODO remove
-    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-20T18:48:30.065553Z'  # no sigma_y override TODO remove
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-21T13:32:36.795812Z'  # no sigma_y override TODO remove
     if cfg.get('load_from_previous_run_path'):
         plot_data = np.load(os.path.join(cfg.load_from_previous_run_path, 'plot_data.npz'))
         image = plot_data['image']; observation_2d = plot_data['observation_2d']; filtbackproj = plot_data['filtbackproj']; recon = plot_data['recon']; recon_mcdo = plot_data['recon_mcdo']
@@ -391,9 +393,9 @@ def plot_walnut(cfg):
         inner_block_mask_inds = [mask_inds for block_idx, mask_inds in enumerate(all_block_mask_inds) if block_idx in inner_block_idx_list]
         inner_inds = np.concatenate(inner_block_mask_inds)
 
-        log_lik_mll, std_pred_mll = collect_dip_bayes_data(full_run_path_mll, cfg, inner_block_idx_list, all_block_mask_inds)
-        log_lik_map, std_pred_map = collect_dip_bayes_data(full_run_path_map, cfg, inner_block_idx_list, all_block_mask_inds)
-        log_lik_mcdo, recon_mcdo, abs_error_mcdo, std_pred_mcdo = collect_mcdo_data(full_run_path_mcdo, cfg, inner_block_idx_list, all_block_mask_inds)
+        log_lik_mll, std_pred_mll = collect_dip_bayes_data(full_run_path_mll, cfg, inner_block_idx_list, all_block_mask_inds, noise_correction_term=noise_correction_term_mll)
+        log_lik_map, std_pred_map = collect_dip_bayes_data(full_run_path_map, cfg, inner_block_idx_list, all_block_mask_inds, noise_correction_term=noise_correction_term_map)
+        log_lik_mcdo, recon_mcdo, abs_error_mcdo, std_pred_mcdo = collect_mcdo_data(full_run_path_mcdo, cfg, inner_block_idx_list, all_block_mask_inds, noise_correction_term=noise_correction_term_mcdo)
 
         np.savez('plot_data.npz',
             **{'image': image, 'observation_2d': observation_2d, 'filtbackproj': filtbackproj, 'recon': recon, 'recon_mcdo': recon_mcdo,
@@ -403,11 +405,7 @@ def plot_walnut(cfg):
             'inner_inds': inner_inds,
             'noise_correction_term_mll': noise_correction_term_mll, 'noise_correction_term_map': noise_correction_term_map, 'noise_correction_term_mcdo': noise_correction_term_mcdo})
 
-    if subtract_noise_correction_term:
-        std_pred_mll -= noise_correction_term_mll
-        std_pred_map -= noise_correction_term_map
-        std_pred_mcdo -= noise_correction_term_mcdo
-        # TODO also subtract eps
+    # TODO also subtract eps
 
     inner_image = image.reshape(-1)[inner_inds]
     inner_recon = recon.reshape(-1)[inner_inds]
@@ -429,7 +427,7 @@ def plot_walnut(cfg):
 
 
     fig, axs = plt.subplots(2, 8, figsize=(14, 5), gridspec_kw={
-        'width_ratios': [1., 0.075, 1., 1., 0.11, 1., 0.3, 1.25],  # includes spacer columns
+        'width_ratios': [1., 0.075, 1., 1., 0.11, 1., 0.4, 1.25],  # includes spacer columns
         'wspace': 0.01, 'hspace': 0.25})
 
     # nan parts black
@@ -477,7 +475,7 @@ def plot_walnut(cfg):
         'marginal std-dev',
         True,
         color_list=[color_abs_error, color_map],
-        legend_kwargs={'loc': 'upper right', 'bbox_to_anchor': (1., 0.99)},
+        legend_kwargs={'loc': 'upper right', 'bbox_to_anchor': (1.015, 0.99)},
         )
     create_hist_plot(
         axs[1, 7],
@@ -486,20 +484,20 @@ def plot_walnut(cfg):
         '',
         False,
         color_list=[color_abs_error, color_mcdo],
-        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1., 0.13)},
+        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1.015, 0.02)},
         )
     # axs[0, 7].set_aspect(0.125)
     # axs[1, 7].set_aspect(0.125)
 
     qq_host_axis = axs[1, 7]
-    qq_axes_rect = [0.48, 0.44, 0.52, 0.65]
+    qq_axes_rect = [0.48, 0.44, 0.52, 0.64]
     ip = InsetPosition(qq_host_axis, qq_axes_rect)
     ax_qq = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
     ax_qq.set_axes_locator(ip)
     ax_qq.set_clip_on(False)
     ax_qq.set_clip_on(False)
-    border_0, border_1 = 0.125, 0.1
-    corner_crop_0, corner_crop_1 = 0.125, 0.15
+    border_0, border_1 = 0.185, 0.25
+    corner_crop_0, corner_crop_1 = 0.25, 0.3
     qq_background = matplotlib.patches.Polygon(
             [[qq_axes_rect[0] - border_0, qq_axes_rect[1] - border_1 + corner_crop_1],
              [qq_axes_rect[0] - border_0 + corner_crop_0, qq_axes_rect[1] - border_1],
@@ -522,9 +520,12 @@ def plot_walnut(cfg):
     # ax_qq.set_aspect(np.diff(ax_qq.get_xlim())/np.diff(ax_qq.get_ylim()))
     ax_qq.add_patch(matplotlib.patches.Rectangle([0.05, 0.95], 0.9, 0.05,
             fill=True, color='#ffffff', edgecolor=None, transform=ax_qq.transAxes, zorder=3))
-    ax_qq.set_title('calibration: Q-Q', y=0.925)
+    ax_qq.set_title('calibration: Q-Q', y=0.95)
+    ax_qq.set_xlabel('prediction quantiles', labelpad=2)
+    ax_qq.set_ylabel('error quantiles', labelpad=2)
 
     fig.savefig(os.path.join(IMAGES_DIR, 'walnut.pdf'), bbox_inches='tight', pad_inches=0.)
+    fig.savefig(os.path.join(IMAGES_DIR, 'walnut.png'), bbox_inches='tight', pad_inches=0., dpi=600)
     plt.show()
 
 if __name__ == "__main__": 
