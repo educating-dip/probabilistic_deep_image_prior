@@ -69,11 +69,7 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
     ray_trafo_module = ray_trafos['ray_trafo_module'].to(reconstructor.device)
     ray_trafo_module_adj = ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
 
-    if cfg.lin_params.simplified_eqn:
-        lin_w_fd = nn.Parameter(torch.zeros_like(map_weights).clone()).to(reconstructor.device)
-    else:
-        lin_w_fd = nn.Parameter(map_weights.clone()).to(reconstructor.device)
-    
+    lin_w_fd = nn.Parameter(torch.zeros_like(map_weights).clone()).to(reconstructor.device)    
     optimizer = torch.optim.Adam([lin_w_fd], **{'lr': cfg.lin_params.lr}, weight_decay=0)
     
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')

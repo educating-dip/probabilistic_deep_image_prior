@@ -32,14 +32,14 @@ def compute_test_image_metrics(path, num_images):
 
 DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
 experiment_name = 'kmnist'
-runs = OmegaConf.load(os.path.join(DIRPATH, 'runs.yaml'))
+runs = OmegaConf.load(os.path.join(DIRPATH, 'kmnist_refined_tv_strength.yaml')) # 'runs.yaml'))
 
 table_dict = {}
 if experiment_name == 'kmnist':
     # gathering data
     for stddev in [0.05, 0.1]:
         for num_angles in [5, 10, 20, 30]:
-                path_to_data = runs.kmnist[num_angles][stddev][0]['path'] # selecting first run in yaml file [0]
+                path_to_data = runs[num_angles][stddev] # runs.kmnist[num_angles][stddev][0]['path'] # selecting first run in yaml file [0]
                 exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
                 data = compute_test_image_metrics(path_to_data, exp_conf.num_images)
                 table_dict[(num_angles, stddev)] = data

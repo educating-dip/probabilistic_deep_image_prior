@@ -71,6 +71,8 @@ def create_qq_plot(ax, data, label_list, title='', color_list=None, legend_kwarg
     abs_ylim = max(map(abs, ax.get_ylim()))
     ax.set_ylim(-abs_ylim, abs_ylim)
     ax.set_title(title)
+    ax.set_xlabel('prediction quantiles')
+    ax.set_ylabel('error quantiles')
     ax.grid(alpha=0.3)
     ax.legend(**(legend_kwargs or {}), loc='lower right')
     ax.spines['top'].set_visible(False)
@@ -109,6 +111,9 @@ def kmnist_image_fig_subplots(data, loglik, filename, titles):
             ax.set_xlim([0, set_xlim_dict[(num_angles, stddev)]])
             ax.set_ylim([0.09, 90])
             ax.set_yscale('log')
+            ax.set_ylabel('density')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
             ax.legend()
             ax.grid(alpha=0.3)
             if i in dic['images']['idx_remove_ticks']: 
@@ -166,8 +171,8 @@ def hex_to_rgb(value, alpha):
 
 def gather_data_from_bayes_dip(idx):
     
-    runs = OmegaConf.load(os.path.join(DIRPATH, 'runs.yaml'))
-    path_to_data = runs.kmnist[num_angles][stddev][0]['path'] # selecting first run in yaml file [0]
+    runs = OmegaConf.load(os.path.join(DIRPATH, 'kmnist_refined_tv_strength.yaml')) # 'runs.yaml'))
+    path_to_data = runs[num_angles][stddev] # runs.kmnist[num_angles][stddev][0]['path'] # selecting first run in yaml file [0]
     recon_data = np.load(os.path.join(path_to_data, 'recon_info_{}.npz'.format(idx)),  allow_pickle=True)
     log_lik_data = np.load(os.path.join(path_to_data, 'test_log_lik_info_{}.npz'.format(idx)),  allow_pickle=True)['test_log_lik'].item()
 
