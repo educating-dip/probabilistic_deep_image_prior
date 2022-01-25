@@ -154,7 +154,7 @@ def coordinator(cfg : DictConfig) -> None:
             ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, 
             linearized_weights=linearized_weights, 
             comment = '_recon_num_' + str(i),
-            use_jacobi_vector=True,
+            use_jacobi_vector=cfg.mrglik.impl.use_jacobi_vector,
             )
 
         torch.save(bayesianized_model.state_dict(), 
