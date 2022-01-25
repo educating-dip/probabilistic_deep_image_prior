@@ -3,7 +3,7 @@ from itertools import islice
 import numpy as np
 import random
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
@@ -53,6 +53,7 @@ def coordinator(cfg : DictConfig) -> None:
     assert cfg.density.assemble_cov_obs_mat.load_path is not None, "no previous run path specified (density.assemble_cov_obs_mat.load_path)"
 
     load_path = cfg.density.assemble_cov_obs_mat.load_path
+    load_cfg = OmegaConf.load(os.path.join(load_path, '.hydra', 'config.yaml'))
 
     for i, data_sample in enumerate(islice(loader, cfg.num_images)):
         if i < cfg.get('skip_first_images', 0):
@@ -74,7 +75,7 @@ def coordinator(cfg : DictConfig) -> None:
                 cfg.noise_specs
                 )
             sample_dict = torch.load(os.path.join(load_path, 'sample_{}.pt'.format(i)), map_location=example_image.device)
-            assert torch.allclose(sample_dict['filtbackproj'], filtbackproj)
+            assert torch.allclose(sample_dict['filtbackproj'], filtbackproj, atol=1e-7)
             # filtbackproj = sample_dict['filtbackproj']
             # observation = sample_dict['observation']
             # example_image = sample_dict['ground_truth']
@@ -92,7 +93,8 @@ def coordinator(cfg : DictConfig) -> None:
 
         if cfg.name in ['mnist', 'kmnist']:
             # model from previous run
-            path = os.path.join(load_path, 'dip_model_{}.pt'.format(i))
+            dip_load_path = load_path if load_cfg.load_dip_models_from_path is None else load_cfg.load_dip_models_from_path
+            path = os.path.join(dip_load_path, 'dip_model_{}.pt'.format(i))
         elif cfg.name == 'walnut':
             # fine-tuned model
             path = os.path.join(get_original_cwd(), reconstructor.cfg.finetuned_params_path 
@@ -155,11 +157,18 @@ def coordinator(cfg : DictConfig) -> None:
             clamp_params(bayesianized_model.gp_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
             clamp_params(bayesianized_model.normal_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
 
+        sub_slice_batches = cfg.density.assemble_cov_obs_mat.get('sub_slice_batches', None)
+        if sub_slice_batches is not None:
+            sub_slice_batches = slice(*sub_slice_batches)
+
         cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
                 fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
+                cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True, sub_slice_batches=sub_slice_batches)
 
-        torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
+        if sub_slice_batches is not None:
+            torch.save({'cov_obs_mat_sub_slice': cov_obs_mat, 'sub_slice_batches': sub_slice_batches}, './cov_obs_mat_sub_slice_{}.pt'.format(i))
+        else:
+            torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
 
 if __name__ == '__main__':
     coordinator()

@@ -348,6 +348,7 @@ def plot_walnut(cfg):
     fs_p1 = 12  #  figure titles
 
     color_abs_error = '#e63946'
+    color_mll = '#5555ff'
     color_map = '#5a6c17'
     color_mcdo = '#ee9b00'
 
@@ -373,6 +374,7 @@ def plot_walnut(cfg):
 
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-20T00:56:37.631314Z'  # TODO remove
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-21T13:32:36.795812Z'  # no sigma_y override TODO remove
+    cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-24T17:00:27.129890Z'  # TODO remove
     if cfg.get('load_from_previous_run_path'):
         plot_data = np.load(os.path.join(cfg.load_from_previous_run_path, 'plot_data.npz'))
         image = plot_data['image']; observation_2d = plot_data['observation_2d']; filtbackproj = plot_data['filtbackproj']; recon = plot_data['recon']; recon_mcdo = plot_data['recon_mcdo']
@@ -426,106 +428,78 @@ def plot_walnut(cfg):
         os.makedirs(images_dir)
 
 
-    fig, axs = plt.subplots(2, 8, figsize=(14, 5), gridspec_kw={
-        'width_ratios': [1., 0.075, 1., 1., 0.11, 1., 0.4, 1.25],  # includes spacer columns
-        'wspace': 0.01, 'hspace': 0.25})
+    fig, axs = plt.subplots(1, 6, figsize=(14, 2.15), gridspec_kw={
+        'width_ratios': [1., 1., 1., 1., 0.2, 1.25],  # includes spacer columns
+        'wspace': 0.1, 'hspace': 0.25})
 
     # nan parts black
     std_pred_mll[np.isnan(std_pred_mll)] = 0.
     std_pred_map[np.isnan(std_pred_map)] = 0.
     std_pred_mcdo[np.isnan(std_pred_mcdo)] = 0.
 
-    vmin_map, vmax_map = min([np.min(abs_error), np.min(std_pred_map)]), np.max(abs_error)  # max([np.max(abs_error), np.max(std_pred_map)])
-    vmin_mcdo, vmax_mcdo = min([np.min(abs_error_mcdo), np.min(std_pred_mcdo)]), max([np.max(abs_error_mcdo), np.max(std_pred_mcdo)])
+    vmin_std, vmax_std = min([np.min(abs_error), np.min(std_pred_map)]), np.max(abs_error)  # max([np.max(abs_error), np.max(std_pred_map)])
 
-    create_image_plot(fig, axs[0, 0], image, title='${\mathbf{x}}$', vmin=0., insets=True, insets_mark_in_orig=True)
-    create_image_plot(fig, axs[0, 2], recon, title='${\mathbf{x}^*}$', vmin=0., insets=True)
-    add_metrics(axs[0, 2], inner_recon, inner_image)
-    create_image_plot(fig, axs[1, 2], recon_mcdo, vmin=0., insets=True)
-    add_metrics(axs[1, 2], inner_recon_mcdo, inner_image)
-    axs[0, 2].set_ylabel('Bayes DIP (TV-MAP)', fontsize=fs_p1)
-    axs[1, 2].set_ylabel('DIP-MCDO', fontsize=fs_p1)
-    # spacer
-    axs[0, 1].remove()
-    axs[1, 1].remove()
-    create_image_plot(fig, axs[0, 3], abs_error, title='$|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_map, insets=True, colorbar='invisible')  #, vmin=vmin_map, vmax=vmax_map)
-    create_image_plot(fig, axs[1, 3], abs_error_mcdo, vmin=0., insets=True, colorbar=True)  # , vmin=vmin_mcdo, vmax=vmax_mcdo)
-    # spacer
-    axs[0, 4].remove()
-    axs[1, 4].remove()
-    create_image_plot(fig, axs[0, 5], std_pred_map, vmin=0., vmax=vmax_map, title='std-dev', insets=True, colorbar=True)  # , vmin=vmin_map, vmax=vmax_map)
-    add_log_lik(axs[0, 5], log_lik_map)
-    create_image_plot(fig, axs[1, 5], std_pred_mcdo, vmin=0., insets=True, colorbar=True)  # , vmin=vmin_mcdo, vmax=vmax_mcdo)
-    add_log_lik(axs[1, 5], log_lik_mcdo)
-
-    axs[1, 0].imshow(observation_2d.T, cmap='gray')
-    axs[1, 0].set_title('${\mathbf{y}_\delta}$')
-    axs[1, 0].set_xticks([])
-    axs[1, 0].set_yticks([])
-    # axs[1, 0].set_aspect(observation_2d.shape[0] / observation_2d.shape[1])
+    create_image_plot(fig, axs[0], image, title='${\mathbf{x}}$', vmin=0., insets=True, insets_mark_in_orig=True)
+    axs[1].set_ylabel('Bayes DIP', fontsize=fs_p1)
+    create_image_plot(fig, axs[1], abs_error, title='$|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_std, insets=True)  #, vmin=vmin_std, vmax=vmax_std)
+    create_image_plot(fig, axs[2], std_pred_mll, vmin=0., vmax=vmax_std, title='std-dev', insets=True)  # , vmin=vmin_std, vmax=vmax_std)
+    axs[2].set_ylabel('MLL', fontsize=fs_p1)
+    add_log_lik(axs[2], log_lik_mll)
+    create_image_plot(fig, axs[3], std_pred_map, vmin=0., vmax=vmax_std, title='std-dev', insets=True, colorbar=True)  # , vmin=vmin_std, vmax=vmax_std)
+    axs[3].set_ylabel('TV-MAP', fontsize=fs_p1)
+    add_log_lik(axs[3], log_lik_map)
 
     # spacer
-    axs[0, 6].remove()
-    axs[1, 6].remove()
+    axs[4].remove()
 
     create_hist_plot(
-        axs[0, 7],
-        (inner_abs_error, inner_std_pred_map), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- Bayes DIP'],
+        axs[5],
+        (inner_abs_error, inner_std_pred_mll, inner_std_pred_map), 
+        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- Bayes DIP (MLL)', 'std-dev -- Bayes DIP (TV-MAP)'],
         'marginal std-dev',
-        True,
-        color_list=[color_abs_error, color_map],
+        False,
+        color_list=[color_abs_error, color_mll, color_map],
         legend_kwargs={'loc': 'upper right', 'bbox_to_anchor': (1.015, 0.99)},
         )
-    create_hist_plot(
-        axs[1, 7],
-        (inner_abs_error_mcdo, inner_std_pred_mcdo), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- DIP-MCDO'],
-        '',
-        False,
-        color_list=[color_abs_error, color_mcdo],
-        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1.015, 0.02)},
-        )
-    # axs[0, 7].set_aspect(0.125)
-    # axs[1, 7].set_aspect(0.125)
+    # axs[5].set_aspect(0.125)
 
-    qq_host_axis = axs[1, 7]
-    qq_axes_rect = [0.48, 0.44, 0.52, 0.64]
-    ip = InsetPosition(qq_host_axis, qq_axes_rect)
-    ax_qq = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
-    ax_qq.set_axes_locator(ip)
-    ax_qq.set_clip_on(False)
-    ax_qq.set_clip_on(False)
-    border_0, border_1 = 0.185, 0.25
-    corner_crop_0, corner_crop_1 = 0.25, 0.3
-    qq_background = matplotlib.patches.Polygon(
-            [[qq_axes_rect[0] - border_0, qq_axes_rect[1] - border_1 + corner_crop_1],
-             [qq_axes_rect[0] - border_0 + corner_crop_0, qq_axes_rect[1] - border_1],
-             [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] - border_1],
-             [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] + qq_axes_rect[3]],
-             [qq_axes_rect[0] - border_0, qq_axes_rect[1] + qq_axes_rect[3]]],
-            fill=True, color='#ffffff', edgecolor=None, transform=qq_host_axis.transAxes, zorder=3)
-    qq_background.set_clip_on(False)
-    qq_host_axis.add_patch(qq_background)
-    fig.add_axes(ax_qq)
+    # qq_host_axis = axs[1, 7]
+    # qq_axes_rect = [0.48, 0.44, 0.52, 0.65]
+    # ip = InsetPosition(qq_host_axis, qq_axes_rect)
+    # ax_qq = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
+    # ax_qq.set_axes_locator(ip)
+    # ax_qq.set_clip_on(False)
+    # ax_qq.set_clip_on(False)
+    # border_0, border_1 = 0.185, 0.25
+    # corner_crop_0, corner_crop_1 = 0.25, 0.3
+    # qq_background = matplotlib.patches.Polygon(
+    #         [[qq_axes_rect[0] - border_0, qq_axes_rect[1] - border_1 + corner_crop_1],
+    #          [qq_axes_rect[0] - border_0 + corner_crop_0, qq_axes_rect[1] - border_1],
+    #          [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] - border_1],
+    #          [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] + qq_axes_rect[3]],
+    #          [qq_axes_rect[0] - border_0, qq_axes_rect[1] + qq_axes_rect[3]]],
+    #         fill=True, color='#ffffff', edgecolor=None, transform=qq_host_axis.transAxes, zorder=3)
+    # qq_background.set_clip_on(False)
+    # qq_host_axis.add_patch(qq_background)
+    # fig.add_axes(ax_qq)
 
-    # osm_mll, osr_mll = scipy.stats.probplot(qq_err_mll, fit=False)
-    osm_map, osr_map = scipy.stats.probplot(qq_err_map, fit=False)
-    osm_mcdo, osr_mcdo = scipy.stats.probplot(qq_err_mcdo, fit=False)
-    create_qq_plot(ax_qq,
-        [(osm_map, osr_map), (osm_mcdo, osr_mcdo)],
-        ['Bayes DIP', 'DIP-MCDO'],
-        color_list=[color_map, color_mcdo],
-        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1., 0.)})
-    # ax_qq.set_aspect(np.diff(ax_qq.get_xlim())/np.diff(ax_qq.get_ylim()))
-    ax_qq.add_patch(matplotlib.patches.Rectangle([0.05, 0.95], 0.9, 0.05,
-            fill=True, color='#ffffff', edgecolor=None, transform=ax_qq.transAxes, zorder=3))
-    ax_qq.set_title('calibration: Q-Q', y=0.95)
-    ax_qq.set_xlabel('prediction quantiles', labelpad=2)
-    ax_qq.set_ylabel('error quantiles', labelpad=2)
+    # # osm_mll, osr_mll = scipy.stats.probplot(qq_err_mll, fit=False)
+    # osm_map, osr_map = scipy.stats.probplot(qq_err_map, fit=False)
+    # osm_mcdo, osr_mcdo = scipy.stats.probplot(qq_err_mcdo, fit=False)
+    # create_qq_plot(ax_qq,
+    #     [(osm_map, osr_map), (osm_mcdo, osr_mcdo)],
+    #     ['Bayes DIP', 'DIP-MCDO'],
+    #     color_list=[color_map, color_mcdo],
+    #     legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1., 0.)})
+    # # ax_qq.set_aspect(np.diff(ax_qq.get_xlim())/np.diff(ax_qq.get_ylim()))
+    # ax_qq.add_patch(matplotlib.patches.Rectangle([0.05, 0.95], 0.9, 0.05,
+    #         fill=True, color='#ffffff', edgecolor=None, transform=ax_qq.transAxes, zorder=3))
+    # ax_qq.set_title('calibration: Q-Q', y=0.93)
+    # ax_qq.set_xlabel('prediction quantiles', labelpad=2)
+    # ax_qq.set_ylabel('error quantiles', labelpad=2)
 
-    fig.savefig(os.path.join(IMAGES_DIR, 'walnut.pdf'), bbox_inches='tight', pad_inches=0.)
-    fig.savefig(os.path.join(IMAGES_DIR, 'walnut.png'), bbox_inches='tight', pad_inches=0., dpi=600)
+    fig.savefig(os.path.join(IMAGES_DIR, 'walnut_mll_vs_map.pdf'), bbox_inches='tight', pad_inches=0.)
+    fig.savefig(os.path.join(IMAGES_DIR, 'walnut_mll_vs_map.png'), bbox_inches='tight', pad_inches=0., dpi=600)
     plt.show()
 
 if __name__ == "__main__": 

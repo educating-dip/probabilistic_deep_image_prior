@@ -16,7 +16,10 @@ compute_single_predictive_cov_block:
 assemble_cov_obs_mat:
   load_path: null
   load_mrglik_opt_iter: null
+  sub_slice_batches: null
 merge_single_block_predictive_image_log_probs:
+  load_path_list: null
+merge_cov_obs_mat_sub_slices:
   load_path_list: null
 estimate_density_from_samples:
   seed: null

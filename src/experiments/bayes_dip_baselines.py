@@ -223,7 +223,7 @@ def coordinator(cfg : DictConfig) -> None:
             torch.save({'recon': recon, 'approx_log_prob': approx_log_prob, 'block_mask_inds': block_mask_inds, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'block_eps_values': block_eps_values},
                 './predictive_image_log_prob_{}.pt'.format(i))
 
-            print('approx log prob ', approx_log_prob / np.prod(ray_trafos['space'].shape))
+            print('approx log prob ', approx_log_prob / np.concatenate(block_mask_inds).flatten().shape[0])
 
         torch.save(reconstructor.model.state_dict(),
             './dip_model_{}.pt'.format(i))
