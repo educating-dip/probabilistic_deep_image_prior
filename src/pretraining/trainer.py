@@ -154,7 +154,7 @@ class Trainer():
                                 self.cfg.save_best_learned_params_path)
                     if (phase =='validation' and
                             self.cfg.get('save_learned_params_base_path', None) is not None and
-                            (epoch + 1) % self.cfg.get('save_learned_params_interval', self.cfg.epochs) == 0):
+                            (epoch + 1) % (self.cfg.get('save_learned_params_interval') or self.cfg.epochs) == 0):
                         self.save_learned_params(
                             '{}_epochs{:d}'.format(self.cfg.save_learned_params_base_path, epoch + 1))
 
