@@ -34,13 +34,19 @@ class RadialBasisFuncCov(nn.Module):
         nn.init.constant_(self.log_lengthscale,
                           np.log(lengthscale_init))
         nn.init.constant_(self.log_variance, np.log(variance_init))
+    
+    def unscaled_cov_mat(self, eps=1e-6):
+        
+        lengthscale = torch.exp(self.log_lengthscale)
+        assert not torch.isnan(lengthscale) 
+        cov_mat = torch.exp(-self.dist_mat / lengthscale) + eps * torch.eye(*self.dist_mat.shape, device=self.store_device)
+        return cov_mat
 
     def cov_mat(self, return_cholesky=True, eps=1e-6):
-
-        lengthscale = torch.exp(self.log_lengthscale)
+        
         variance = torch.exp(self.log_variance)
-        assert ( not torch.isnan(lengthscale) ) or ( not torch.isnan(variance) )
-        cov_mat = torch.exp(-self.dist_mat / lengthscale) + eps * torch.eye(*self.dist_mat.shape, device=self.store_device)
+        assert not torch.isnan(variance)
+        cov_mat = self.unscaled_cov_mat(eps=eps)
         cov_mat = variance * cov_mat
         return (cholesky(cov_mat) if return_cholesky else cov_mat)
 
@@ -55,6 +61,15 @@ class RadialBasisFuncCov(nn.Module):
                              ** 2)
     def log_det(self):
         return 2 * self.cov_mat(return_cholesky=True).diag().log().sum()
+    
+    def log_lengthscale_cov_mat_grad(self):
+        # we multiply by the lengthscale value (chain rule)
+        return self.dist_mat * self.cov_mat(return_cholesky=False) / torch.exp(self.log_lengthscale) # we do this by removing the 2
+    
+    def log_varainces_cov_mat_grad(self):
+        # we multiply by the variance value (chain rule)
+        return self.cov_mat(return_cholesky=False, eps=1e-6)
+         
 
 class GPprior(nn.Module):
 
@@ -104,3 +119,12 @@ class NormalPrior(nn.Module):
         mean = torch.zeros(self.kernel_size, device=self.store_device)
         m = Normal(loc=mean, scale=torch.exp(self.log_variance)**.5)
         return m.log_prob(x)
+
+    def cov_mat(self, return_cholesky=True):
+        eye = torch.eye(self.kernel_size).to(self.store_device)
+        fct = torch.exp(0.5 * self.log_variance) if return_cholesky else torch.exp(self.log_variance)
+        cov_mat = fct * eye
+        return cov_mat
+
+    def cov_log_det(self):
+        return self.log_variance * self.kernel_size

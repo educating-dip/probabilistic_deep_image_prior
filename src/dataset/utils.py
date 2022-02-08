@@ -11,6 +11,7 @@ from .walnut import (
         get_walnut_data, get_walnut_single_slice_matrix_ray_trafos,
         get_walnut_proj_numel)
 from .pretraining_ellipses import DiskDistributedEllipsesDataset
+from .matrix_ray_trafo_utils import MatrixRayTrafo, get_matrix_ray_trafo_module
 
 def load_testset_MNIST_dataset(path='mnist', batchsize=1,
                                crop=False):
@@ -31,6 +32,26 @@ def load_testset_KMNIST_dataset(path='kmnist', batchsize=1,
                                 transforms.Normalize(
                                 (0.1307,), (0.3081,))]))
     return DataLoader(testset, batchsize, shuffle=False)
+
+def load_trainset_MNIST_dataset(path='mnist', batchsize=1,
+                               crop=False):
+    path = os.path.join(get_original_cwd(), path)
+    trainset = datasets.MNIST(root=path, train=True, download=True,
+                             transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(
+                                (0.1307,), (0.3081,))]))
+    return DataLoader(trainset, batchsize, shuffle=False)
+
+def load_trainset_KMNIST_dataset(path='kmnist', batchsize=1,
+                               crop=False):
+    path = os.path.join(get_original_cwd(), path)
+    trainset = datasets.KMNIST(root=path, train=True, download=True,
+                             transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(
+                                (0.1307,), (0.3081,))]))
+    return DataLoader(trainset, batchsize, shuffle=False)
 
 def load_testset_walnut(cfg):
     observation, filtbackproj, ground_truth = get_walnut_data(cfg)
@@ -56,6 +77,20 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
                 num_angles=cfg.beam_num_angle)
         ray_trafo = odl.tomo.RayTransform(space, geometry)
         pseudoinverse = odl.tomo.fbp_op(ray_trafo)
+        ray_trafo_mat = \
+            odl.operator.oputils.matrix_representation(ray_trafo)
+        ray_trafo_mat_flat = ray_trafo_mat.reshape(-1, cfg.size**2)
+        matrix_ray_trafo = MatrixRayTrafo(ray_trafo_mat_flat,
+                im_shape=(cfg.size, cfg.size),
+                proj_shape=ray_trafo.range.shape)
+    #     ray_trafo = matrix_ray_trafo.apply
+
+        class apply_ray_trafo: 
+                def __call__(self, x):
+                    return matrix_ray_trafo.apply(x)
+        ray_trafo_range = ray_trafo.range
+        ray_trafo = apply_ray_trafo()
+        ray_trafo.range = ray_trafo_range
         ray_trafo_dict = {
             'space': space,
             'geometry': geometry,
@@ -64,15 +99,16 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
             }
 
         if return_torch_module:
-            ray_trafo_module = OperatorModule(ray_trafo)
-            ray_trafo_dict['ray_trafo_module'] = ray_trafo_module
-            ray_trafo_module_adj = OperatorModule(ray_trafo.adjoint)
-            ray_trafo_dict['ray_trafo_module_adj'] = ray_trafo_module_adj
-            pseudoinverse_module = OperatorModule(pseudoinverse)
-            ray_trafo_dict['pseudoinverse_module'] = pseudoinverse_module
+            ray_trafo_dict['ray_trafo_module'] = (
+                    get_matrix_ray_trafo_module(
+                            ray_trafo_mat_flat, (cfg.size, cfg.size),
+                            ray_trafo_range.shape, sparse=False))
+            ray_trafo_dict['ray_trafo_module_adj'] = (
+                    get_matrix_ray_trafo_module(
+                            ray_trafo_mat_flat, (cfg.size, cfg.size),
+                            ray_trafo_range.shape, adjoint=True, sparse=False))
+            ray_trafo_dict['pseudoinverse_module'] = OperatorModule(pseudoinverse)
         if return_op_mat:
-            ray_trafo_mat = \
-                odl.operator.oputils.matrix_representation(ray_trafo)
             ray_trafo_dict['ray_trafo_mat'] = ray_trafo_mat
             ray_trafo_mat_adj = ray_trafo_mat.T
             ray_trafo_dict['ray_trafo_mat_adj'] = ray_trafo_mat_adj
@@ -137,7 +173,7 @@ def get_pretraining_dataset(cfg, return_ray_trafo_torch_module=True,
         ellipses_dataset = DiskDistributedEllipsesDataset(**dataset_specs)
         space = ellipses_dataset.space
         proj_numel = get_walnut_proj_numel(cfg)
-        proj_space = odl.rn(proj_numel, dtype=np.float32)
+        proj_space = odl.rn((1, proj_numel), dtype=np.float32)
         dataset = ellipses_dataset.create_pair_dataset(ray_trafo=ray_trafo,
                 pinv_ray_trafo=pseudoinverse,
                 domain=space, proj_space=proj_space,

@@ -1,0 +1,30 @@
+block_size_for_approx: 100
+eps_mode: auto
+eps: 1e-2
+do_eps_sweep: True
+cov_image_eps: null
+cov_obs_mat_eps_mode: auto
+cov_obs_mat_eps: 1e-2
+num_mc_samples: 10000
+compute_single_predictive_cov_block:
+  load_path: null
+  block_idx: null
+  load_mrglik_opt_iter: null
+  override_noise_model_variance_obs: null
+  cov_obs_mat_load_path: null
+  save_full_block: False
+assemble_cov_obs_mat:
+  load_path: null
+  load_mrglik_opt_iter: null
+  sub_slice_batches: null
+merge_single_block_predictive_image_log_probs:
+  load_path_list: null
+merge_cov_obs_mat_sub_slices:
+  load_path_list: null
+estimate_density_from_samples:
+  seed: null
+  save_samples: True
+  save_samples_chunk_size: 512
+  samples_load_path_list: null
+  save_block_files: False
+  save_single_result_file: True

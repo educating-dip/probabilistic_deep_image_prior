@@ -57,7 +57,7 @@ def tensorboard_fig_subplots(data, filename):
         for k, (mll, map) in enumerate(zip(mll_tmp, map_tmp)):
             if k == 0: 
                 ax.plot(list(range(N)), mll[0], color='red', zorder=10, **mll_kws, label='MLL')
-                ax.plot(list(range(N)), map[0], color='red', zorder=10, **map_kws, label='Type-II MAP')
+                ax.plot(list(range(N)), map[0], color='red', zorder=10, **map_kws, label='TV-MAP')
                 ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
                 if i == 0: 
                     lgd = ax.legend(loc = 'upper right')
@@ -110,7 +110,7 @@ def hyperparamters_fig_subplots(data, filename):
             for k, (mll_lengthscale, map_lengthscale) in enumerate(zip(mll_lengthscales, map_lengthscales)):
                 if k == 0: 
                     ax.plot(list(range(N)), mll_lengthscale[0], color='red', zorder=10, **mll_kws, label='MLL')
-                    ax.plot(list(range(N)), map_lengthscale[0], color='red', zorder=10, **map_kws, label='Type-II MAP')
+                    ax.plot(list(range(N)), map_lengthscale[0], color='red', zorder=10, **map_kws, label='TV-MAP')
                     if i == 0: 
                         lgd = ax.legend(loc = 'upper right')
                         lgd.legendHandles[0].set_color('black')

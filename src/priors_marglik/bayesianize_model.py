@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.linalg as linalg
 from collections.abc import Iterable
 from copy import deepcopy
+from itertools import chain
 from .priors import GPprior, RadialBasisFuncCov, NormalPrior
 
 class BayesianizeModel(nn.Module):
@@ -11,11 +12,13 @@ class BayesianizeModel(nn.Module):
         self,
         reconstructor,
         lengthscale_init,
-        variance_init
+        variance_init,
+        include_normal_priors=True,
         ):
         
         super().__init__()
         self.store_device = reconstructor.device
+        self.include_normal_priors = include_normal_priors
         self.gp_priors = nn.ModuleList([])
         self.normal_priors = nn.ModuleList([])
         self.ref_modules_under_gp_priors = []
@@ -26,6 +29,15 @@ class BayesianizeModel(nn.Module):
                     'variance_init': variance_init
                 }
             )
+
+        self.ref_num_filters_per_modules_under_gp_priors = self._get_num_filters_under_priors(
+                self.ref_modules_under_gp_priors
+            )
+        
+        self.ref_num_params_per_modules_under_normal_priors = self._get_num_filters_under_priors(
+                self.ref_modules_under_normal_priors
+            )
+
     
     def _extract_blocks_from_model(self, model):
         return [block for block in model.children()]
@@ -57,16 +69,26 @@ class BayesianizeModel(nn.Module):
             if all(el == kernel_size_list[0] for el in kernel_size_list):
                 return modules
             else: 
-                return modules[kernel_size_list.index(kernel_size)]
+                return [modules[kernel_size_list.index(kernel_size)]]
         else:
             return []
     
+    def _remove_modules_from_inactive_skip_ch(self, modules, sub_block):
+
+        if hasattr(sub_block, 'skip'):
+            if not sub_block.skip:
+                return modules[:-1]
+            else:
+                return modules
+        else:
+            return modules
+
     def init_priors(self, reconstructor, priors_kwards):
 
         def _add_priors_from_modules(modules, priors_kwards): 
 
             modules_gp_priors = self._find_modules_under_gp_prior(modules)
-            modules_normal_priors = self._find_modules_under_normal_prior(modules)
+            modules_normal_priors = self._find_modules_under_normal_prior(modules) if self.include_normal_priors else []
             if modules_gp_priors: self._add_gp_priors(modules_gp_priors, **priors_kwards)
             if modules_normal_priors: self._add_normal_priors(modules_normal_priors, 
                 **{'variance_init': priors_kwards['variance_init']})
@@ -76,11 +98,11 @@ class BayesianizeModel(nn.Module):
             if isinstance(block, Iterable):
                 for sub_block in block:
                     modules = self._extract_Conv2d_modules(sub_block)
+                    modules = self._remove_modules_from_inactive_skip_ch(modules, sub_block)
                     _add_priors_from_modules(modules, priors_kwards)
             else:
                 modules = self._extract_Conv2d_modules(block)
                 _add_priors_from_modules(modules, priors_kwards)
-
 
     def _add_gp_priors(self, modules, lengthscale_init, variance_init):
 
@@ -96,7 +118,7 @@ class BayesianizeModel(nn.Module):
             RadialBasisFuncCov(**cov_kwards).to(self.store_device)
         GPp = GPprior(cov_func, self.store_device)
         self.gp_priors.append(GPp)
-        self.ref_modules_under_gp_priors.append([GPp, modules])
+        self.ref_modules_under_gp_priors.append(modules)
 
     def _add_normal_priors(self, modules, variance_init):
 
@@ -104,4 +126,72 @@ class BayesianizeModel(nn.Module):
                 variance_init = variance_init,
                 store_device = self.store_device)
         self.normal_priors.append(normal_prior)
-        self.ref_modules_under_normal_priors.append([normal_prior, modules])
+        self.ref_modules_under_normal_priors.append(modules)
+
+    @property
+    def priors(self):
+        return chain(self.gp_priors, self.normal_priors)
+
+    @property
+    def ref_modules_under_priors(self):
+        return self.ref_modules_under_gp_priors + self.ref_modules_under_normal_priors
+    
+    @property
+    def num_params_under_priors(self): 
+        return sum(self.ref_num_filters_per_modules_under_gp_priors) * 3**2 + \
+                sum(self.ref_num_params_per_modules_under_normal_priors)
+
+    @property
+    def gp_log_lengthscales(self):
+        return [gp_prior.cov.log_lengthscale for gp_prior in self.gp_priors
+                if gp_prior.cov.log_lengthscale.requires_grad]
+
+    def set_gp_log_lengthscales_grad(self, grads):
+        
+        assert len(self.gp_priors) == len(grads)
+
+        for gp_prior, grad in zip(self.gp_priors, grads):
+            if gp_prior.cov.log_lengthscale.requires_grad:
+                if gp_prior.cov.log_lengthscale.grad is None: 
+                    gp_prior.cov.log_lengthscale.grad = grad
+                else:
+                    gp_prior.cov.log_lengthscale.grad += grad
+
+    @property
+    def gp_log_variances(self):
+        return [gp_prior.cov.log_variance for gp_prior in self.gp_priors
+                if gp_prior.cov.log_variance.requires_grad]
+    
+    def set_gp_log_variances_grad(self, grads):
+
+        assert len(self.gp_priors) == len(grads)
+
+        for gp_prior, grad in zip(self.gp_priors, grads):
+            if gp_prior.cov.log_variance.requires_grad:
+                if gp_prior.cov.log_variance.grad is None:
+                    gp_prior.cov.log_variance.grad = grad 
+                else: 
+                    gp_prior.cov.log_variance.grad += grad
+
+    @property
+    def normal_log_variances(self):
+        return [normal_prior.log_variance for normal_prior in self.normal_priors
+                if normal_prior.log_variance.requires_grad]
+
+    def get_all_modules_under_prior(self):
+        all_modules = []
+        for modules in self.ref_modules_under_gp_priors:
+            all_modules += modules
+        for modules in self.ref_modules_under_normal_priors:
+            all_modules += modules
+        return all_modules
+    
+    def _get_num_filters_under_priors(self, modules_under_priors):
+
+        num_filters_under_priors = []
+        for modules in modules_under_priors:
+            num_filters_per_modules = 0
+            for module in modules:
+                num_filters_per_modules +=  module.in_channels * module.out_channels
+            num_filters_under_priors.append(num_filters_per_modules)
+        return num_filters_under_priors

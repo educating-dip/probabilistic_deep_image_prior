@@ -41,11 +41,16 @@ def get_walnut_single_slice_matrix_ray_trafos(cfg, return_torch_module=True,
             proj_col_sub_sampling=proj_col_sub_sampling)
     matrix_ray_trafo = MatrixRayTrafo(matrix,
             im_shape=(cfg.size, cfg.size),
-            proj_shape=(matrix.shape[0],))
-    ray_trafo = matrix_ray_trafo.apply
+            proj_shape=(1, matrix.shape[0],))
+#     ray_trafo = matrix_ray_trafo.apply
 
-    pseudoinverse = partial(
-            walnut_ray_trafo.apply_fdk, squeeze=True)
+    class apply_ray_trafo: 
+            def __call__(self, x):
+                return matrix_ray_trafo.apply(x)
+    ray_trafo = apply_ray_trafo()
+    ray_trafo.range = odl.rn((1, matrix.shape[0],), dtype=np.float32)
+
+    pseudoinverse = lambda y: walnut_ray_trafo.apply_fdk(y.squeeze(), squeeze=True)
 
     ray_trafo_dict = {
             'space': space,
@@ -57,11 +62,11 @@ def get_walnut_single_slice_matrix_ray_trafos(cfg, return_torch_module=True,
         ray_trafo_dict['ray_trafo_module'] = (
                 get_matrix_ray_trafo_module(
                         matrix, (cfg.size, cfg.size),
-                        (matrix.shape[0],), sparse=True))
+                        (1, matrix.shape[0],), sparse=True))
         ray_trafo_dict['ray_trafo_module_adj'] = (
                 get_matrix_ray_trafo_module(
                         matrix, (cfg.size, cfg.size),
-                        (matrix.shape[0],), adjoint=True, sparse=True))
+                        (1, matrix.shape[0],), adjoint=True, sparse=True))
         # ray_trafo_dict['pseudoinverse_module'] not implemented
     if return_op_mat:
         ray_trafo_dict['ray_trafo_mat'] = matrix
@@ -109,7 +114,7 @@ def get_walnut_data(cfg):
     observation = walnut_ray_trafo.flat_projs_in_mask(
             walnut_ray_trafo.projs_from_full(observation_full))
 
-    filtbackproj = np.asarray(pseudoinverse(observation))
+    filtbackproj = np.asarray(pseudoinverse(observation)) # TODO 
 
     slice_ind = get_single_slice_ind(
             data_path=data_path_test,
@@ -125,4 +130,25 @@ def get_walnut_data(cfg):
         filtbackproj *= scaling_factor
         ground_truth *= scaling_factor
 
-    return observation, filtbackproj, ground_truth
+    return observation[None], filtbackproj, ground_truth
+
+INNER_PART_START_0 = 72
+INNER_PART_START_1 = 72
+INNER_PART_END_0 = 424
+INNER_PART_END_1 = 424
+
+def get_inner_block_indices(block_size):
+
+    num_blocks_0 = VOL_SZ[1] // block_size
+    num_blocks_1 = VOL_SZ[2] // block_size
+    start_block_0 = INNER_PART_START_0 // block_size
+    start_block_1 = INNER_PART_START_1 // block_size
+    end_block_0 = ceil(INNER_PART_END_0 / block_size)
+    end_block_1 = ceil(INNER_PART_END_1 / block_size)
+
+    block_idx_list = [
+        block_idx for block_idx in range(num_blocks_0 * num_blocks_1)
+        if block_idx % num_blocks_0 in range(start_block_0, end_block_0) and
+        block_idx // num_blocks_0 in range(start_block_1, end_block_1)]
+
+    return block_idx_list
