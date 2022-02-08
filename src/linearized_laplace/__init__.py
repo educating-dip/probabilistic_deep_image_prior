@@ -1,3 +1,3 @@
 from .jac import compute_jacobian_single_batch, agregate_flatten_weight_grad
-from .lin_cov import lin_pred_cov, submatrix_lin_pred_cov_prior, low_rank_GP_lin_model_post_pred_cov, submatrix_low_rank_GP_lin_model_prior_cov
+from .lin_cov import image_space_lin_model_post_pred_cov, submatrix_image_space_lin_model_prior_cov
 from .utils import gaussian_log_prob

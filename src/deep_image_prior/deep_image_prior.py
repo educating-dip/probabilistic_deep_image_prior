@@ -6,6 +6,7 @@ import numpy as np
 import tensorboardX
 from torch.optim import Adam
 from torch.nn import MSELoss
+from hydra.utils import get_original_cwd
 from tqdm import tqdm
 from warnings import warn 
 from .network import UNet
@@ -54,16 +55,19 @@ class DeepImagePriorReconstructor():
             current_time + '_' + socket.gethostname() + comment)
         self.writer = tensorboardX.SummaryWriter(logdir=logdir)
 
-    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None):
+    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True, use_tv_loss=True):
 
         if self.cfg.torch_manual_seed:
             torch.random.manual_seed(self.cfg.torch_manual_seed)
 
-        self.init_model()
+        if use_init_model: 
+            self.init_model()
+
         if self.cfg.load_pretrain_model:
-            path = \
+            path = os.path.join(
+                get_original_cwd(),
                 self.cfg.learned_params_path if self.cfg.learned_params_path.endswith('.pt') \
-                    else self.cfg.learned_params_path + '.pt'
+                    else self.cfg.learned_params_path + '.pt')
             self.model.load_state_dict(torch.load(path, map_location=self.device))
         else:
             self.model.to(self.device)
@@ -86,13 +90,18 @@ class DeepImagePriorReconstructor():
             criterion = MSELoss()
 
         best_loss = np.inf
-        best_output = self.model(self.net_input)[0].detach()
+        model_out = self.model(self.net_input)
+        best_output, pre_activation_best_output = model_out[0].detach(), model_out[1].detach()
+        best_params_state_dict = deepcopy(self.model.state_dict())
 
-        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar) as pbar:
+        with tqdm(range(self.cfg.optim.iterations), desc='DIP', disable= not self.cfg.show_pbar, miniters=self.cfg.optim.iterations//100) as pbar:
             for i in pbar:
                 self.optimizer.zero_grad()
-                output, pre_activation_output = self.model(self.net_input)[0], self.model(self.net_input)[1].detach()
-                loss = criterion(self.ray_trafo_module(output), y_delta) + self.cfg.optim.gamma * tv_loss(output)
+                model_out = self.model(self.net_input)
+                output, pre_activation_output = model_out[0], model_out[1].detach()
+                loss = criterion(self.ray_trafo_module(output), y_delta) 
+                if use_tv_loss: 
+                    loss = loss + self.cfg.optim.gamma * tv_loss(output)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
                 if loss.item() < best_loss:
@@ -110,7 +119,7 @@ class DeepImagePriorReconstructor():
                 if ground_truth is not None:
                     best_output_psnr = PSNR(best_output.detach().cpu(), ground_truth.cpu())
                     output_psnr = PSNR(output.detach().cpu(), ground_truth.cpu())
-                    pbar.set_postfix({'output_psnr': output_psnr})
+                    pbar.set_description('DIP output_psnr={:.1f}'.format(output_psnr), refresh=False)
                     self.writer.add_scalar('best_output_psnr', best_output_psnr, i)
                     self.writer.add_scalar('output_psnr', output_psnr, i)
 

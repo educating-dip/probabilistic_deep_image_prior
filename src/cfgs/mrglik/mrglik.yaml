@@ -1,13 +1,18 @@
 optim:
   iterations: 1200
   lr: 0.01
-  include_predCP: True
+  include_predcp: True
   gamma: ${net.optim.gamma}
-  scl_fct_gamma: None
-  scaling_fct: 2
+  scaling_fct: 0.5
+  tv_samples: 1000
 priors:
   lengthscale_init: 0.1
-linearized_weights:
-  lr: 5e-4
-  wd: 1e-8
-  iterations: 15000
+  variance_init: 1
+  include_normal_priors: True
+  clamp_variances: True
+  clamp_variances_min_log: -4.5
+impl:
+  use_fwAD_for_jvp: True
+  vec_batch_size: 2
+  use_jacobi_vector: True
+  log_grad_cg_residual: True
