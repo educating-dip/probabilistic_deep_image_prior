@@ -27,13 +27,8 @@ IMAGES_DIR='./images_walnut'
 # run_path_map = 'outputs/2022-01-18T22:34:13.511015Z'  # Kyy eps abs 0.15661916026566242
 # # run_path_map = 'outputs/2022-01-20T11:34:15.385454Z'  # no sigma_y override, Kyy eps abs 0.1
 # # run_path_map = 'outputs/2022-01-24T00:26:29.402003Z'
-# # run_path_map = 'outputs/2022-01-25T17:12:47.291452Z'  # higher tv strength, rel 1e-5, 2+2 sample chunks
-# # run_path_map = 'outputs/2022-01-25T18:59:17.620031Z'  # higher tv strength, rel 1e-5, 4+4 sample chunks
-# # run_path_map = 'outputs/2022-01-25T17:35:11.026966Z'  # higher tv strength, abs 0.15661916026566242, 2+2 sample chunks
-# # run_path_map = 'outputs/2022-01-25T19:29:16.626840Z'  # higher tv strength, abs 0.15661916026566242, 4+4 sample chunks
 
 # run_path_mcdo = 'outputs/2022-01-18T19:06:20.999879Z'
-
 
 # only diagonal (1x1 blocks)
 BLOCK_SIZE = 1
@@ -62,28 +57,6 @@ run_path_mcdo = 'outputs/2022-01-26T12:48:23.773875Z'
 # run_path_map = 'outputs/2022-01-26T12:05:16.778534Z'  # tv 50
 # # run_path_map = 'outputs/2022-01-26T12:17:32.412439Z'  # tv 5
 # run_path_mcdo = 'outputs/2022-01-26T12:49:52.534479Z'
-
-# # runs with less clamping (-6.9), no sigma_y override
-# # no pred cp, Kyy eps abs 0.1
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:35:48.232522Z  # 1x1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:55:03.152392Z  # 2x2
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:07:51.728686Z  # 4x4 running
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:08:01.054439Z  # 8x8 running
-# # pred cp, tv strength 50, Kyy eps abs 0.1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-25T23:01:38.312512Z  # 1x1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:52:20.554709Z  # 2x2
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:04:20.319776Z  # 4x4 running
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:05:16.778534Z  # 8x8 running
-# # pred cp, tv strength 5, Kyy eps abs 0.1
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:15:47.785793Z  # 1x1 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:16:43.417979Z  # 2x2 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:16:58.319795Z  # 4x4 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:17:32.412439Z  # 8x8 running
-# # mcdo
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:48:23.773875Z  # 1x1 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T13:36:28.182717Z  # 2x2 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T13:25:49.279219Z  # 4x4 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:49:52.534479Z  # 8x8 running
 
 name = 'walnut'
 
@@ -200,15 +173,6 @@ def create_image_plot(fig, ax, image, title='', vmin=None, vmax=None, cmap='gray
             cb.ax.set_visible(False)
     ax.set_xticks([])
     ax.set_yticks([])
-    thickness = 3.
-    rect_parts = [
-        ([START_0 - thickness, START_1 - thickness], END_0+1-START_0 + 2*thickness, thickness),
-        ([START_0 - thickness, END_1+1], END_0+1-START_0 + 2*thickness, thickness),
-        ([START_0 - thickness, START_1 - thickness], thickness, END_1+1-START_1 + 2*thickness),
-        ([END_0+1, START_1 - thickness], thickness, END_1+1-START_1 + 2*thickness)]
-    for rect_part in rect_parts:
-        rect = matplotlib.patches.Rectangle(*rect_part, fill=True, color='#ffffff', edgecolor=None)
-        ax.add_patch(rect)
     return im
 
 def add_colorbar(fig, ax, im):
@@ -252,6 +216,7 @@ def add_inset(fig, ax, image, axes_rect, rect, cmap='gray', vmin=None, vmax=None
         inset_image_handle.set_clip_path(matplotlib.path.Path(frame_path_closed),
                 transform=axins.transAxes)
         inset_image_handle.set_clip_on(True)
+    return axins
 
 def add_metrics(ax, recon, image, pos=None, as_xlabel=True, **kwargs):
     psnr = PSNR(recon, image)
@@ -421,10 +386,10 @@ def plot_walnut(cfg):
     cfg = OmegaConf.load(os.path.join(full_run_path_mll, '.hydra', 'config.yaml'))  # use mll config, the settings relevant in this script should be same for all methods
     assert cfg.density.block_size_for_approx == BLOCK_SIZE
 
-    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-25T17:28:02.597221Z'  # TODO remove
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-24T21:51:23.897788Z'  # TODO remove
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-24T20:40:33.508462Z'  # no sigma_y override TODO remove
-    cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-26T16:08:35.318070Z'  # 1x1
-    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-26T16:06:21.197426Z'  # 2x2
+    cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-27T20:40:52.673302Z'  # 1x1
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-26T16:39:10.160868Z'  # 2x2
     if cfg.get('load_from_previous_run_path'):
         plot_data = np.load(os.path.join(cfg.load_from_previous_run_path, 'plot_data.npz'))
         image = plot_data['image']; observation_2d = plot_data['observation_2d']; filtbackproj = plot_data['filtbackproj']; recon = plot_data['recon']; recon_mcdo = plot_data['recon_mcdo']
@@ -467,9 +432,9 @@ def plot_walnut(cfg):
     inner_std_pred_map = std_pred_map.reshape(-1)[inner_inds]
     inner_std_pred_mcdo = std_pred_mcdo.reshape(-1)[inner_inds]
 
-    qq_err_mll = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_mll)
-    qq_err_map = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_map)
-    qq_err_mcdo = normalized_error_for_qq_plot(inner_recon_mcdo, inner_image, inner_std_pred_mcdo)
+    # qq_err_mll = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_mll)
+    # qq_err_map = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_map)
+    # qq_err_mcdo = normalized_error_for_qq_plot(inner_recon_mcdo, inner_image, inner_std_pred_mcdo)
 
     images_dir = os.path.join(IMAGES_DIR)
 
@@ -477,9 +442,7 @@ def plot_walnut(cfg):
         os.makedirs(images_dir)
 
 
-    fig, axs = plt.subplots(2, 8, figsize=(14, 5), gridspec_kw={
-        'width_ratios': [1., 0.075, 1., 1., 0.11, 1., 0.4, 1.25],  # includes spacer columns
-        'wspace': 0.01, 'hspace': 0.25})
+    fig, ax = plt.subplots(figsize=(3, 1.5), gridspec_kw={'left': 0., 'right': 0.5})
 
     # nan parts black
     std_pred_mll[np.isnan(std_pred_mll)] = 0.
@@ -489,94 +452,28 @@ def plot_walnut(cfg):
     vmin_map, vmax_map = min([np.min(abs_error), np.min(std_pred_map)]), np.max(abs_error)  # max([np.max(abs_error), np.max(std_pred_map)])
     vmin_mcdo, vmax_mcdo = min([np.min(abs_error_mcdo), np.min(std_pred_mcdo)]), max([np.max(abs_error_mcdo), np.max(std_pred_mcdo)])
 
-    create_image_plot(fig, axs[0, 0], image, title='${\mathbf{x}}$', vmin=0., insets=True, insets_mark_in_orig=True)
-    create_image_plot(fig, axs[0, 2], recon, title='${\mathbf{x}^*}$', vmin=0., insets=True)
-    add_metrics(axs[0, 2], recon[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
-    create_image_plot(fig, axs[1, 2], recon_mcdo, vmin=0., insets=True)
-    add_metrics(axs[1, 2], recon_mcdo[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
-    axs[0, 2].set_ylabel('Bayes DIP (TV-MAP)', fontsize=fs_p1)
-    axs[1, 2].set_ylabel('DIP-MCDO', fontsize=fs_p1)
-    # spacer
-    axs[0, 1].remove()
-    axs[1, 1].remove()
-    create_image_plot(fig, axs[0, 3], abs_error, title='$|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_map, insets=True, colorbar='invisible')  #, vmin=vmin_map, vmax=vmax_map)
-    create_image_plot(fig, axs[1, 3], abs_error_mcdo, vmin=0., insets=True, colorbar=True)  # , vmin=vmin_mcdo, vmax=vmax_mcdo)
-    # spacer
-    axs[0, 4].remove()
-    axs[1, 4].remove()
-    create_image_plot(fig, axs[0, 5], std_pred_map, vmin=0., vmax=vmax_map, title='std-dev', insets=True, colorbar=True)  # , vmin=vmin_map, vmax=vmax_map)
-    add_log_lik(axs[0, 5], log_lik_map)
-    create_image_plot(fig, axs[1, 5], std_pred_mcdo, vmin=0., insets=True, colorbar=True)  # , vmin=vmin_mcdo, vmax=vmax_mcdo)
-    add_log_lik(axs[1, 5], log_lik_mcdo)
+    create_image_plot(fig, ax, image[START_0:END_0, START_1:END_1], vmin=0.)
+    rect = [120-START_0, 230-START_0, 52, 104]
+    ax_abs_error = add_inset(fig, ax, abs_error[START_0:END_0, START_1:END_1], [1.01, 0.505, 0.99, 0.495], rect, vmin=None, vmax=None, interpolation='none', frame_color='#aa0000', frame_path=[[0., 1.], [0., 0.], [1., 0.], [1., 1.], [0., 1.]], clip_path_closing=[], mark_in_orig=True)
+    ax_std = add_inset(fig, ax, std_pred_map[START_0:END_0, START_1:END_1], [1.01, 0., 0.99, 0.495], rect, vmin=None, vmax=None, interpolation='none', frame_color='#aa0000', frame_path=[[0., 1.], [0., 0.], [1., 0.], [1., 1.], [0., 1.]], clip_path_closing=[], mark_in_orig=False)
+    ax_abs_error_twin = ax_abs_error.twinx()
+    ax_std_twin = ax_std.twinx()
+    ax_abs_error_twin.set_xticks([])
+    ax_abs_error_twin.set_yticks([])
+    ax_std_twin.set_xticks([])
+    ax_std_twin.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    for spine in ax_abs_error_twin.spines.values():
+        spine.set_visible(False)
+    for spine in ax_std_twin.spines.values():
+        spine.set_visible(False)
+    ax.set_ylabel('original image', labelpad=2)
+    ax_abs_error_twin.set_ylabel('error', rotation=-90, labelpad=9)
+    ax_std_twin.set_ylabel('std-dev', rotation=-90, labelpad=9)
 
-    axs[1, 0].imshow(observation_2d.T, cmap='gray')
-    axs[1, 0].set_title('${\mathbf{y}_\delta}$')
-    axs[1, 0].set_xticks([])
-    axs[1, 0].set_yticks([])
-    # axs[1, 0].set_aspect(observation_2d.shape[0] / observation_2d.shape[1])
-
-    # spacer
-    axs[0, 6].remove()
-    axs[1, 6].remove()
-
-    create_hist_plot(
-        axs[0, 7],
-        (inner_abs_error, inner_std_pred_map), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- Bayes DIP'],
-        'marginal std-dev',
-        True,
-        color_list=[color_abs_error, color_map],
-        legend_kwargs={'loc': 'upper right', 'bbox_to_anchor': (1.015, 0.99)},
-        )
-    create_hist_plot(
-        axs[1, 7],
-        (inner_abs_error_mcdo, inner_std_pred_mcdo), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- DIP-MCDO'],
-        '',
-        False,
-        color_list=[color_abs_error, color_mcdo],
-        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1.015, 0.02)},
-        )
-    # axs[0, 7].set_aspect(0.125)
-    # axs[1, 7].set_aspect(0.125)
-
-    qq_host_axis = axs[1, 7]
-    qq_axes_rect = [0.48, 0.44, 0.52, 0.64]
-    ip = InsetPosition(qq_host_axis, qq_axes_rect)
-    ax_qq = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
-    ax_qq.set_axes_locator(ip)
-    ax_qq.set_clip_on(False)
-    ax_qq.set_clip_on(False)
-    border_0, border_1 = 0.185, 0.25
-    corner_crop_0, corner_crop_1 = 0.25, 0.3
-    qq_background = matplotlib.patches.Polygon(
-            [[qq_axes_rect[0] - border_0, qq_axes_rect[1] - border_1 + corner_crop_1],
-             [qq_axes_rect[0] - border_0 + corner_crop_0, qq_axes_rect[1] - border_1],
-             [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] - border_1],
-             [qq_axes_rect[0] + qq_axes_rect[2], qq_axes_rect[1] + qq_axes_rect[3]],
-             [qq_axes_rect[0] - border_0, qq_axes_rect[1] + qq_axes_rect[3]]],
-            fill=True, color='#ffffff', edgecolor=None, transform=qq_host_axis.transAxes, zorder=3)
-    qq_background.set_clip_on(False)
-    qq_host_axis.add_patch(qq_background)
-    fig.add_axes(ax_qq)
-
-    # osm_mll, osr_mll = scipy.stats.probplot(qq_err_mll, fit=False)
-    osm_map, osr_map = scipy.stats.probplot(qq_err_map, fit=False)
-    osm_mcdo, osr_mcdo = scipy.stats.probplot(qq_err_mcdo, fit=False)
-    create_qq_plot(ax_qq,
-        [(osm_map, osr_map), (osm_mcdo, osr_mcdo)],
-        ['Bayes DIP', 'DIP-MCDO'],
-        color_list=[color_map, color_mcdo],
-        legend_kwargs={'loc': 'lower right', 'bbox_to_anchor': (1., 0.)})
-    # ax_qq.set_aspect(np.diff(ax_qq.get_xlim())/np.diff(ax_qq.get_ylim()))
-    ax_qq.add_patch(matplotlib.patches.Rectangle([0.05, 0.95], 0.9, 0.05,
-            fill=True, color='#ffffff', edgecolor=None, transform=ax_qq.transAxes, zorder=3))
-    ax_qq.set_title('calibration: Q-Q', y=0.95)
-    ax_qq.set_xlabel('prediction quantiles', labelpad=2)
-    ax_qq.set_ylabel('error quantiles', labelpad=2)
-
-    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_{BLOCK_SIZE}x{BLOCK_SIZE}.pdf'), bbox_inches='tight', pad_inches=0.)
-    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_{BLOCK_SIZE}x{BLOCK_SIZE}.png'), bbox_inches='tight', pad_inches=0., dpi=600)
+    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_mini_{BLOCK_SIZE}x{BLOCK_SIZE}.pdf'), bbox_inches='tight', pad_inches=0.)
+    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_mini_{BLOCK_SIZE}x{BLOCK_SIZE}.png'), bbox_inches='tight', pad_inches=0., dpi=600)
     plt.show()
 
 if __name__ == "__main__": 

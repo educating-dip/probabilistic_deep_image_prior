@@ -23,12 +23,18 @@ variant = ''
 DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext/'
 OUT_PATH = './images_walnut'
 
-if variant == 'no_clamping':
-    run_path_mll = 'outputs/2022-01-13T00:14:58.653648Z'
-    run_path_map = 'outputs/2022-01-13T00:14:58.653639Z'
-else:
-    run_path_mll = 'outputs/2022-01-15T17:02:21.405935Z'
-    run_path_map = 'outputs/2022-01-15T17:02:21.406508Z'
+# if variant == 'no_clamping':
+#     run_path_mll = 'outputs/2022-01-13T00:14:58.653648Z'
+#     run_path_map = 'outputs/2022-01-13T00:14:58.653639Z'
+# else:
+#     run_path_mll = 'outputs/2022-01-15T17:02:21.405935Z'
+#     run_path_map = 'outputs/2022-01-15T17:02:21.406508Z'
+
+assert not variant
+
+ # less clamping (-6.9)
+run_path_mll = 'outputs/2022-01-19T21:57:00.254636Z'
+run_path_map = 'outputs/2022-01-19T21:57:00.234532Z'  # tv 50
 
 def get_line_kwargs(kws=None):
     kws = kws or {}

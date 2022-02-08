@@ -26,3 +26,5 @@ estimate_density_from_samples:
   save_samples: True
   save_samples_chunk_size: 512
   samples_load_path_list: null
+  save_block_files: False
+  save_single_result_file: True

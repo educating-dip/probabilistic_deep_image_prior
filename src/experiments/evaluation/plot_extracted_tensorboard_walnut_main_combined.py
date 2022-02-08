@@ -20,10 +20,16 @@ from omegaconf import OmegaConf
 DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext/'
 OUT_PATH = './images_walnut'
 
-run_path_mll_no_clamping = 'outputs/2022-01-13T00:14:58.653648Z'
-run_path_map_no_clamping = 'outputs/2022-01-13T00:14:58.653639Z'
-run_path_mll = 'outputs/2022-01-15T17:02:21.405935Z'
-run_path_map = 'outputs/2022-01-15T17:02:21.406508Z'
+# run_path_mll_for_sigma_y = 'outputs/2022-01-13T00:14:58.653648Z'
+# run_path_map_for_sigma_y = 'outputs/2022-01-13T00:14:58.653639Z'
+# run_path_mll = 'outputs/2022-01-15T17:02:21.405935Z'
+# run_path_map = 'outputs/2022-01-15T17:02:21.406508Z'
+
+# less clamping (-6.9)
+run_path_mll = 'outputs/2022-01-19T21:57:00.254636Z'
+run_path_map = 'outputs/2022-01-19T21:57:00.234532Z'  # tv 50
+run_path_mll_for_sigma_y = run_path_mll
+run_path_map_for_sigma_y = run_path_map
 
 def get_line_kwargs(kws=None):
     kws = kws or {}
@@ -207,21 +213,21 @@ def plot():
 
     highlight_idx = 1
 
-    full_run_path_mll_no_clamping = os.path.join(DIR_PATH, run_path_mll_no_clamping)
-    full_run_path_map_no_clamping = os.path.join(DIR_PATH, run_path_map_no_clamping)
+    full_run_path_mll_for_sigma_y = os.path.join(DIR_PATH, run_path_mll_for_sigma_y)
+    full_run_path_map_for_sigma_y = os.path.join(DIR_PATH, run_path_map_for_sigma_y)
     full_run_path_mll = os.path.join(DIR_PATH, run_path_mll)
     full_run_path_map = os.path.join(DIR_PATH, run_path_map)
 
     setting = 'ass20_css6'
     exp_name = 'calibration_uncertainty_estimates'
 
-    mll_tb_path_no_clamping = find_tensorboard_path_mll(full_run_path_mll_no_clamping)
-    map_tb_path_no_clamping = find_tensorboard_path_map(full_run_path_map_no_clamping)
+    mll_tb_path_for_sigma_y = find_tensorboard_path_mll(full_run_path_mll_for_sigma_y)
+    map_tb_path_for_sigma_y = find_tensorboard_path_map(full_run_path_map_for_sigma_y)
     mll_tb_path = find_tensorboard_path_mll(full_run_path_mll)
     map_tb_path = find_tensorboard_path_map(full_run_path_map)
 
-    mll_log_no_clamping = load_or_convert_log_file(mll_tb_path_no_clamping)
-    map_log_no_clamping = load_or_convert_log_file(map_tb_path_no_clamping)
+    mll_log_for_sigma_y = load_or_convert_log_file(mll_tb_path_for_sigma_y)
+    map_log_for_sigma_y = load_or_convert_log_file(map_tb_path_for_sigma_y)
     mll_log = load_or_convert_log_file(mll_tb_path)
     map_log = load_or_convert_log_file(map_tb_path)
 
@@ -230,8 +236,8 @@ def plot():
     # use sigma_y from non-clamping runs
     for k in mll_log:
         if 'noise_model_variance_obs' in k:
-            mll_log_combined[k] = mll_log_no_clamping[k]
-            map_log_combined[k] = map_log_no_clamping[k]
+            mll_log_combined[k] = mll_log_for_sigma_y[k]
+            map_log_combined[k] = map_log_for_sigma_y[k]
 
     images_dir = OUT_PATH
 

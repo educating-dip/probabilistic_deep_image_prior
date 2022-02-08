@@ -12,48 +12,61 @@ import torch
 from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor, PSNR, SSIM
 from omegaconf import OmegaConf
-from dataset.walnut import get_walnut_data
+from dataset.walnut import get_walnut_data, INNER_PART_START_0, INNER_PART_END_0, INNER_PART_START_1, INNER_PART_END_1, get_inner_block_indices
 from dataset.walnuts_interface import get_single_slice_ray_trafo, get_projection_data
 from dataset.utils import get_standard_ray_trafos
-from scalable_linearised_laplace import get_image_block_masks
+from scalable_linearised_laplace import get_image_block_mask_inds
 
 DIR_PATH='/localdata/jleuschn/experiments/dip_bayesian_ext/'
 IMAGES_DIR='./images_walnut'
 
-run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
-# run_path_mll = 'outputs/2022-01-20T11:29:58.458635Z'  # no sigma_y override, Kyy eps abs 0.1
+# run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
+# # run_path_mll = 'outputs/2022-01-20T11:29:58.458635Z'  # no sigma_y override, Kyy eps abs 0.1
 
-# run_path_map = 'outputs/2022-01-18T22:32:09.051642Z'  # Kyy eps rel 1e-5
-run_path_map = 'outputs/2022-01-18T22:34:13.511015Z'  # Kyy eps abs 0.15661916026566242
-# run_path_map = 'outputs/2022-01-20T11:34:15.385454Z'  # no sigma_y override, Kyy eps abs 0.1
-# run_path_map = 'outputs/2022-01-24T00:26:29.402003Z'
+# # run_path_map = 'outputs/2022-01-18T22:32:09.051642Z'  # Kyy eps rel 1e-5
+# run_path_map = 'outputs/2022-01-18T22:34:13.511015Z'  # Kyy eps abs 0.15661916026566242
+# # run_path_map = 'outputs/2022-01-20T11:34:15.385454Z'  # no sigma_y override, Kyy eps abs 0.1
+# # run_path_map = 'outputs/2022-01-24T00:26:29.402003Z'
 
-run_path_mcdo = 'outputs/2022-01-18T19:06:20.999879Z'
+# run_path_mcdo = 'outputs/2022-01-18T19:06:20.999879Z'
+
+
+# only diagonal (1x1 blocks)
+BLOCK_SIZE = 1
+run_path_mll = 'outputs/2022-01-26T00:35:48.232522Z'
+run_path_map = 'outputs/2022-01-25T23:01:38.312512Z'  # tv 50
+# run_path_map = 'outputs/2022-01-26T12:15:47.785793Z'  # tv 5
+run_path_mcdo = 'outputs/2022-01-26T12:48:23.773875Z'
+
+# # 2x2 blocks
+# BLOCK_SIZE = 2
+# run_path_mll = 'outputs/2022-01-26T00:55:03.152392Z'
+# run_path_map = 'outputs/2022-01-26T00:52:20.554709Z'  # tv 50
+# # run_path_map = 'outputs/2022-01-26T12:16:43.417979Z'  # tv 5
+# run_path_mcdo = 'outputs/2022-01-26T13:36:28.182717Z'
+
+# # 4x4 blocks
+# BLOCK_SIZE = 4
+# run_path_mll = 'outputs/2022-01-26T12:07:51.728686Z'
+# run_path_map = 'outputs/2022-01-26T12:04:20.319776Z'  # tv 50
+# # run_path_map = 'outputs/2022-01-26T12:16:58.319795Z'  # tv 5
+# run_path_mcdo = 'outputs/2022-01-26T13:25:49.279219Z'
+
+# # 8x8 blocks
+# BLOCK_SIZE = 8
+# run_path_mll = 'outputs/2022-01-26T12:08:01.054439Z'
+# run_path_map = 'outputs/2022-01-26T12:05:16.778534Z'  # tv 50
+# # run_path_map = 'outputs/2022-01-26T12:17:32.412439Z'  # tv 5
+# run_path_mcdo = 'outputs/2022-01-26T12:49:52.534479Z'
 
 name = 'walnut'
 
 IM_SHAPE = (501, 501)
-BLOCK_SIZE = 8
-START_0 = 72
-START_1 = 72
-END_0 = 424
-END_1 = 424
 
-def get_inner_block_indices():
-
-    num_blocks_0 = IM_SHAPE[0] // BLOCK_SIZE
-    num_blocks_1 = IM_SHAPE[1] // BLOCK_SIZE
-    start_block_0 = START_0 // BLOCK_SIZE
-    start_block_1 = START_1 // BLOCK_SIZE
-    end_block_0 = ceil(END_0 / BLOCK_SIZE)
-    end_block_1 = ceil(END_1 / BLOCK_SIZE)
-
-    block_idx_list = [
-        block_idx for block_idx in range(num_blocks_0 * num_blocks_1)
-        if block_idx % num_blocks_0 in range(start_block_0, end_block_0) and
-        block_idx // num_blocks_0 in range(start_block_1, end_block_1)]
-
-    return block_idx_list
+START_0 = INNER_PART_START_0
+START_1 = INNER_PART_START_1
+END_0 = INNER_PART_END_0
+END_1 = INNER_PART_END_1
 
 def get_noise_correction_term(ray_trafos, log_noise_model_variance_obs):
     # pseudo-inverse computation
@@ -121,7 +134,7 @@ def create_hist_plot(ax, data, label_list, title, remove_ticks=False, color_list
             ax.hist(el.flatten(), bins=dic['hist']['num_bins'], zorder=zorder,
                  facecolor=hex_to_rgb(color, alpha), edgecolor=hex_to_rgb(color, alpha=1), label=label, **kws)
     ax.set_title(title)
-    ax.set_xlim([0, 1.15])
+    ax.set_xlim([0, 0.6])
     ax.set_ylim([2e-4, 150])
     ax.grid(alpha=0.3)
     ax.legend(**(legend_kwargs or {}))
@@ -149,7 +162,7 @@ def create_qq_plot(ax, data, label_list, title='', color_list=None, legend_kwarg
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-def create_image_plot(fig, ax, image, title='', vmin=None, vmax=None, cmap='gray', interpolation=None, insets=False, insets_mark_in_orig=False, colorbar=False):
+def create_image_plot(fig, ax, image, title='', vmin=None, vmax=None, cmap='gray', interpolation='none', insets=False, insets_mark_in_orig=False, colorbar=False):
     im = ax.imshow(image, vmin=vmin, vmax=vmax, cmap=cmap, interpolation=interpolation)
     ax.set_title(title)
     if insets:
@@ -179,7 +192,7 @@ def add_colorbar(fig, ax, im):
     cax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(4))
     return cb
 
-def add_inset(fig, ax, image, axes_rect, rect, cmap='gray', vmin=None, vmax=None, interpolation=None, frame_color='#aa0000', frame_path=None, clip_path_closing=None, mark_in_orig=False, origin='upper'):
+def add_inset(fig, ax, image, axes_rect, rect, cmap='gray', vmin=None, vmax=None, interpolation='none', frame_color='#aa0000', frame_path=None, clip_path_closing=None, mark_in_orig=False, origin='upper'):
     ip = InsetPosition(ax, axes_rect)
     axins = matplotlib.axes.Axes(fig, [0., 0., 1., 1.])
     axins.set_axes_locator(ip)
@@ -310,11 +323,12 @@ def collect_mcdo_data(path, cfg, block_idx_list, all_block_mask_inds, noise_corr
     for mask_inds, block_diag in zip(predictive_image_log_prob_dict['block_mask_inds'], predictive_image_log_prob_dict['block_diags']):
         std_mcdo[mask_inds] = np.clip(block_diag.cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
 
-    requested_block_mask_inds = [mask_inds for block_idx, mask_inds in enumerate(all_block_mask_inds) if block_idx in block_idx_list]
+    requested_block_mask_inds = np.array(all_block_mask_inds)[block_idx_list]
     # loaded data should be exactly what is requested with block_idx_list
     assert np.array_equal(sorted(np.concatenate(predictive_image_log_prob_dict['block_mask_inds'])),
                           sorted(np.concatenate(requested_block_mask_inds)))
-    log_lik = predictive_image_log_prob_dict['approx_log_prob'].item() / (len(block_idx_list) * BLOCK_SIZE**2)
+    num_pixels = len(np.concatenate(predictive_image_log_prob_dict['block_mask_inds']))
+    log_lik = predictive_image_log_prob_dict['approx_log_prob'].item() / num_pixels
 
     return (log_lik, recon_mcdo, abs_error_mcdo, std_mcdo.reshape(IM_SHAPE))
 
@@ -322,16 +336,26 @@ def collect_dip_bayes_data(path, cfg, block_idx_list, all_block_mask_inds, noise
 
     std = np.full(np.prod(IM_SHAPE), np.nan)
 
-    block_log_probs = []
-    for block_idx, mask_inds in enumerate(all_block_mask_inds):
-        if block_idx not in block_idx_list:
-            continue
-        predictive_image_log_prob_block_dict = torch.load(os.path.join(DIR_PATH, path, 'predictive_image_log_prob_block{}_0.pt'.format(block_idx)))
-        assert np.array_equal(mask_inds, predictive_image_log_prob_block_dict['mask_inds'])
-        std[mask_inds] = np.clip(predictive_image_log_prob_block_dict['block_diag'].cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
-        block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'].item())
+    try:
+        predictive_image_log_prob_dict = torch.load(os.path.join(DIR_PATH, path, 'predictive_image_log_prob_0.pt'))
+        assert np.array_equal(np.concatenate(predictive_image_log_prob_dict['block_mask_inds']), np.concatenate(np.array(all_block_mask_inds)[block_idx_list]))
+        for mask_inds, block_diag in zip(predictive_image_log_prob_dict['block_mask_inds'], predictive_image_log_prob_dict['block_diags']):
+            std[mask_inds] = np.clip(block_diag.cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
+        block_log_probs = [block_log_prob.item() for block_log_prob in predictive_image_log_prob_dict['block_log_probs']]
+        num_pixels = len(np.concatenate(predictive_image_log_prob_dict['block_mask_inds']))
+    except FileNotFoundError:
+        block_log_probs = []
+        num_pixels = 0
+        for block_idx, mask_inds in enumerate(all_block_mask_inds):
+            if block_idx not in block_idx_list:
+                continue
+            predictive_image_log_prob_block_dict = torch.load(os.path.join(DIR_PATH, path, 'predictive_image_log_prob_block{}_0.pt'.format(block_idx)))
+            assert np.array_equal(mask_inds, predictive_image_log_prob_block_dict['mask_inds'])
+            std[mask_inds] = np.clip(predictive_image_log_prob_block_dict['block_diag'].cpu().numpy() - noise_correction_term, a_min=0., a_max=None)**0.5
+            block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'].item())
+            num_pixels += len(mask_inds)
 
-    log_lik = np.sum(block_log_probs) / (len(block_idx_list) * BLOCK_SIZE**2)
+    log_lik = np.sum(block_log_probs) / num_pixels
 
     return log_lik, std.reshape(IM_SHAPE)
 
@@ -374,7 +398,9 @@ def plot_walnut(cfg):
 
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-20T00:56:37.631314Z'  # TODO remove
     # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-21T13:32:36.795812Z'  # no sigma_y override TODO remove
-    cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-24T17:00:27.129890Z'  # TODO remove
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-24T20:35:18.987288Z'  # TODO remove
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-26T16:28:47.864713Z'  # 1x1
+    # cfg.load_from_previous_run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-26T16:33:15.970045Z'  # 2x2
     if cfg.get('load_from_previous_run_path'):
         plot_data = np.load(os.path.join(cfg.load_from_previous_run_path, 'plot_data.npz'))
         image = plot_data['image']; observation_2d = plot_data['observation_2d']; filtbackproj = plot_data['filtbackproj']; recon = plot_data['recon']; recon_mcdo = plot_data['recon_mcdo']
@@ -389,10 +415,9 @@ def plot_walnut(cfg):
         noise_correction_term_mll = get_noise_correction_term(ray_trafos, log_noise_model_variance_obs=collect_log_noise_model_variance_obs(full_run_path_mll))
         noise_correction_term_map = get_noise_correction_term(ray_trafos, log_noise_model_variance_obs=collect_log_noise_model_variance_obs(full_run_path_map))
         noise_correction_term_mcdo = get_noise_correction_term(ray_trafos, log_noise_model_variance_obs=0.)
-        inner_block_idx_list = get_inner_block_indices()
-        block_masks = get_image_block_masks(IM_SHAPE, cfg.density.block_size_for_approx)
-        all_block_mask_inds = [np.nonzero(mask)[0] for mask in block_masks]
-        inner_block_mask_inds = [mask_inds for block_idx, mask_inds in enumerate(all_block_mask_inds) if block_idx in inner_block_idx_list]
+        inner_block_idx_list = get_inner_block_indices(BLOCK_SIZE)
+        all_block_mask_inds = get_image_block_mask_inds(IM_SHAPE, cfg.density.block_size_for_approx)
+        inner_block_mask_inds = np.array(all_block_mask_inds)[inner_block_idx_list]
         inner_inds = np.concatenate(inner_block_mask_inds)
 
         log_lik_mll, std_pred_mll = collect_dip_bayes_data(full_run_path_mll, cfg, inner_block_idx_list, all_block_mask_inds, noise_correction_term=noise_correction_term_mll)
@@ -418,9 +443,9 @@ def plot_walnut(cfg):
     inner_std_pred_map = std_pred_map.reshape(-1)[inner_inds]
     inner_std_pred_mcdo = std_pred_mcdo.reshape(-1)[inner_inds]
 
-    qq_err_mll = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_mll)
-    qq_err_map = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_map)
-    qq_err_mcdo = normalized_error_for_qq_plot(inner_recon_mcdo, inner_image, inner_std_pred_mcdo)
+    # qq_err_mll = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_mll)
+    # qq_err_map = normalized_error_for_qq_plot(inner_recon, inner_image, inner_std_pred_map)
+    # qq_err_mcdo = normalized_error_for_qq_plot(inner_recon_mcdo, inner_image, inner_std_pred_mcdo)
 
     images_dir = os.path.join(IMAGES_DIR)
 
@@ -498,8 +523,8 @@ def plot_walnut(cfg):
     # ax_qq.set_xlabel('prediction quantiles', labelpad=2)
     # ax_qq.set_ylabel('error quantiles', labelpad=2)
 
-    fig.savefig(os.path.join(IMAGES_DIR, 'walnut_mll_vs_map.pdf'), bbox_inches='tight', pad_inches=0.)
-    fig.savefig(os.path.join(IMAGES_DIR, 'walnut_mll_vs_map.png'), bbox_inches='tight', pad_inches=0., dpi=600)
+    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_mll_vs_map_{BLOCK_SIZE}x{BLOCK_SIZE}.pdf'), bbox_inches='tight', pad_inches=0.)
+    fig.savefig(os.path.join(IMAGES_DIR, f'walnut_mll_vs_map_{BLOCK_SIZE}x{BLOCK_SIZE}.png'), bbox_inches='tight', pad_inches=0., dpi=600)
     plt.show()
 
 if __name__ == "__main__": 

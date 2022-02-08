@@ -20,6 +20,7 @@ from scalable_linearised_laplace import (
         sample_from_posterior, approx_predictive_cov_image_block_from_samples, predictive_image_block_log_prob,
         get_image_block_masks, stabilize_predictive_cov_image_block,
         stabilize_prior_cov_obs_mat, clamp_params)
+from dataset.walnut import get_inner_block_indices
 
 ### Compute a single block
 ### (specified via `density.compute_single_predictive_cov_block.block_idx`) of
@@ -239,14 +240,29 @@ def coordinator(cfg : DictConfig) -> None:
                         torch.save(mc_sample_images_chunk,
                                 './posterior_samples_chunk{}_{}.pt'.format(chunk_idx, i))
         mc_sample_images = torch.cat(mc_sample_images, axis=0)
+        limit_loaded_samples = cfg.density.estimate_density_from_samples.get('limit_loaded_samples', None)
+        if limit_loaded_samples:
+            mc_sample_images = mc_sample_images[:limit_loaded_samples]
         print('total number of posterior samples:', mc_sample_images.shape[0])
 
         # compute predictive image log prob for blocks
+
+        if cfg.density.estimate_density_from_samples.save_single_result_file:
+            block_mask_inds = {}
+            block_log_probs = {}
+            block_diags = {}
+            block_eps_values = {}
+
         block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
         block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx  # may be used to restrict to a subset of blocks
         if block_idx_list is None:
             block_idx_list = list(range(len(block_masks)))
+        elif isinstance(block_idx_list, str):
+            if block_idx_list == 'walnut_inner':
+                block_idx_list = get_inner_block_indices(block_size=cfg.density.block_size_for_approx)
+            else:
+                raise ValueError('Unknown block_idx_list configuration: {}'.format(block_idx_list))
         else:
             try:
                 block_idx_list = list(block_idx_list)
@@ -303,11 +319,28 @@ def coordinator(cfg : DictConfig) -> None:
                 predictive_image_log_prob_block_dict['eps_sweep_values'] = eps_sweep_values
                 predictive_image_log_prob_block_dict['eps_sweep_block_log_probs'] = eps_sweep_block_log_probs
 
-            torch.save(predictive_image_log_prob_block_dict,
-                './predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))
+            if cfg.density.estimate_density_from_samples.save_block_files:
+                torch.save(predictive_image_log_prob_block_dict,
+                    './predictive_image_log_prob_block{}_{}.pt'.format(block_idx, i))
+
+            if cfg.density.estimate_density_from_samples.save_single_result_file:
+                block_mask_inds[block_idx] = predictive_image_log_prob_block_dict['mask_inds']
+                block_log_probs[block_idx] = predictive_image_log_prob_block_dict['block_log_prob']
+                block_diags[block_idx] = predictive_image_log_prob_block_dict['block_diag']
+                block_eps_values[block_idx] = predictive_image_log_prob_block_dict['block_eps']
 
         if errors:
             print('errors occured in the following blocks:', errors)
+
+        if cfg.density.estimate_density_from_samples.save_single_result_file:
+            assert not errors
+            approx_log_prob = torch.sum(torch.stack(list(block_log_probs.values())))
+            torch.save({'approx_log_prob': approx_log_prob, 'block_mask_inds': list(block_mask_inds.values()), 'block_log_probs': list(block_log_probs.values()), 'block_diags': list(block_diags.values()), 'block_eps_values': list(block_eps_values.values())},
+                './predictive_image_log_prob_{}.pt'.format(i))
+
+        num_pixels_in_blocks = sum([len(mask_inds) for mask_inds in block_mask_inds.values()])
+
+        print('approx log prob (mean over {} px): {}'.format(num_pixels_in_blocks, approx_log_prob / num_pixels_in_blocks))
 
 if __name__ == '__main__':
     coordinator()

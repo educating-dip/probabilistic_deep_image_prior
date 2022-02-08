@@ -246,10 +246,10 @@ def coordinator(cfg : DictConfig) -> None:
         log_prob = dist.log_prob(example_image.to(reconstructor.device).flatten())
 
         for block_size, approx_log_prob in zip(block_size_list, approx_log_prob_list):
-            print('approx using block size {}:'.format(block_size), approx_log_prob / example_image.numel())
+            print('approx using patch size {}:'.format(block_size), approx_log_prob / example_image.numel())
 
         for block_size, approx_log_prob_from_samples in zip(block_size_list, approx_log_prob_from_samples_list):
-            print('approx from samples using block size {}:'.format(block_size), approx_log_prob_from_samples / example_image.numel())
+            print('approx from samples using patch size {}:'.format(block_size), approx_log_prob_from_samples / example_image.numel())
 
         if test_from_samples_only_diag:
             log_prob_from_samples = approx_density_from_samples(recon.to(reconstructor.device), example_image.to(reconstructor.device), mc_sample_images, noise_x_correction_term=lik_hess_inv_diag_mean)

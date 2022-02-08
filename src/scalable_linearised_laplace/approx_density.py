@@ -82,6 +82,19 @@ def get_image_block_masks(image_shape, block_size, flatten=True):
             block_masks.append(mask)
     return block_masks
 
+def get_image_block_mask_inds(image_shape, block_size, flatten=True):
+    block_slices_0, block_slices_1 = get_image_block_slices(image_shape, block_size)
+
+    block_mask_inds = []
+    for slice_0 in block_slices_0:
+        for slice_1 in block_slices_1:
+            mask = np.zeros(image_shape, dtype=bool)
+            mask[slice_0, slice_1] = True
+            if flatten:
+                mask = mask.flatten()
+            block_mask_inds.append(np.nonzero(mask)[0])
+    return block_mask_inds
+
 # block of K_ff
 def get_cov_image_mat_block(mask, ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules, vec_batch_size, eps=None):
 
@@ -146,6 +159,7 @@ def approx_predictive_cov_image_block_from_samples(mc_sample_images, noise_x_cor
     # cov = diffs.T @ diffs / diffs.shape[0]  # image x image
 
     cov = torch.cov(mc_sample_images.T, correction=0)
+    cov = torch.atleast_2d(cov)
 
     if noise_x_correction_term is not None:
         cov[np.diag_indices(cov.shape[0])] += noise_x_correction_term

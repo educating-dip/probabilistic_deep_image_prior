@@ -50,8 +50,7 @@ def get_walnut_single_slice_matrix_ray_trafos(cfg, return_torch_module=True,
     ray_trafo = apply_ray_trafo()
     ray_trafo.range = odl.rn((1, matrix.shape[0],), dtype=np.float32)
 
-    pseudoinverse = partial(
-            walnut_ray_trafo.apply_fdk, squeeze=True)
+    pseudoinverse = lambda y: walnut_ray_trafo.apply_fdk(y.squeeze(), squeeze=True)
 
     ray_trafo_dict = {
             'space': space,
@@ -132,3 +131,24 @@ def get_walnut_data(cfg):
         ground_truth *= scaling_factor
 
     return observation[None], filtbackproj, ground_truth
+
+INNER_PART_START_0 = 72
+INNER_PART_START_1 = 72
+INNER_PART_END_0 = 424
+INNER_PART_END_1 = 424
+
+def get_inner_block_indices(block_size):
+
+    num_blocks_0 = VOL_SZ[1] // block_size
+    num_blocks_1 = VOL_SZ[2] // block_size
+    start_block_0 = INNER_PART_START_0 // block_size
+    start_block_1 = INNER_PART_START_1 // block_size
+    end_block_0 = ceil(INNER_PART_END_0 / block_size)
+    end_block_1 = ceil(INNER_PART_END_1 / block_size)
+
+    block_idx_list = [
+        block_idx for block_idx in range(num_blocks_0 * num_blocks_1)
+        if block_idx % num_blocks_0 in range(start_block_0, end_block_0) and
+        block_idx // num_blocks_0 in range(start_block_1, end_block_1)]
+
+    return block_idx_list

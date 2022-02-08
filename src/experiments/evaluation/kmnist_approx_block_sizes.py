@@ -25,7 +25,7 @@ def errorfill(x, y, yerr, color=None, alpha_fill=0.3, line_alpha=1, ax=None, lw=
     ax.fill_between(x, ymax, ymin, color=color, alpha=alpha_fill, linewidths=fill_linewidths)
     return plt_return
 
-def get_approx_log_prob_list(run_path, num_samples, ddof=1):  # using less biased estimate of std because we only take 5 samples (by default)
+def get_approx_log_prob_list(run_path, num_samples, ddof=0):
     log_probs = []
     for i in range(num_samples):
         predictive_image_log_prob_dict = torch.load(os.path.join(run_path, 'predictive_image_log_prob_{}.pt'.format(i)), map_location='cpu')
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     for noise in noise_list:
         table += ' & ' + '\multicolumn{{2}}{{c}}{{\\textbf{{{}\,\% noise}}}}'.format(int(noise * 100))
     table += '\\\\\n'
-    table += 'block size'
+    table += 'patch size'
     for noise in noise_list:
         table += ' & MLL & TV-MAP'
     table += '\\\\\n'
@@ -91,9 +91,9 @@ if __name__ == '__main__':
             log_probs_approx_mll = log_probs_approx[(angles, noise)][block_size]['mll']
             log_probs_approx_map = log_probs_approx[(angles, noise)][block_size]['tv_map']
             mean_log_prob_approx_mll = np.mean(log_probs_approx_mll)
-            std_error_log_prob_approx_mll = np.std(log_probs_approx_mll, ddof=1) / np.sqrt(num_samples)
+            std_error_log_prob_approx_mll = np.std(log_probs_approx_mll, ddof=0) / np.sqrt(num_samples)
             mean_log_prob_approx_map = np.mean(log_probs_approx_map)
-            std_error_log_prob_approx_map = np.std(log_probs_approx_map, ddof=1) / np.sqrt(num_samples)
+            std_error_log_prob_approx_map = np.std(log_probs_approx_map, ddof=0) / np.sqrt(num_samples)
             table += ' & ' + '${:.4f} \pm {:.4f}$'.format(mean_log_prob_approx_mll, std_error_log_prob_approx_mll)
             table += ' & ' + '${:.4f} \pm {:.4f}$'.format(mean_log_prob_approx_map, std_error_log_prob_approx_map)
         table += '\\\\\n'
@@ -129,7 +129,7 @@ if __name__ == '__main__':
         log_probs_approx_per_block_size_and_sample_mll = np.array([log_probs_approx[(angles, noise)][block_size]['mll'] for block_size in block_size_list])  # block size x samples
         log_probs_approx_per_block_size_and_sample_map = np.array([log_probs_approx[(angles, noise)][block_size]['tv_map'] for block_size in block_size_list])  # block size x samples
         ax.set_title('{}\,\% noise'.format(int(noise*100)))
-        ax.set_xlabel('block size [px]')
+        ax.set_xlabel('patch size [px]')
         ax.set_xscale('log', base=2)
         ax.xaxis.set_ticks(block_size_list)
         ax.xaxis.set_major_formatter('${x}^2$')
@@ -144,7 +144,7 @@ if __name__ == '__main__':
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
     axs[1].set_yticklabels([' '])
-    axs[0].set_ylabel('log-likelihood')
+    axs[0].set_ylabel('test log-likelihood')
     axs[1].legend()
 
     fig.savefig(os.path.join(images_dir, 'kmnist_approx_block_sizes_angles_{}.pdf'.format(angles)), bbox_inches='tight', pad_inches=0.)
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         log_probs_approx_per_block_size_and_sample_mll = np.array([log_probs_approx[(angles, noise)][block_size]['mll'] for block_size in block_size_list])  # block size x samples
         log_probs_approx_per_block_size_and_sample_map = np.array([log_probs_approx[(angles, noise)][block_size]['tv_map'] for block_size in block_size_list])  # block size x samples
         ax.set_title('{}\,\% noise'.format(int(noise*100)))
-        ax.set_xlabel('block size [px]')
+        ax.set_xlabel('patch size [px]')
         ax.set_xscale('log', base=2)
         ax.xaxis.set_ticks(block_size_list)
         ax.xaxis.set_major_formatter('${x}^2$')
@@ -179,7 +179,7 @@ if __name__ == '__main__':
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
     axs[1].set_yticklabels([' '])
-    axs[0].set_ylabel('log-likelihood')
+    axs[0].set_ylabel('test log-likelihood')
     axs[1].legend([h_mll, h_map], ['MLL', 'TV-MAP'])
 
     fig.savefig(os.path.join(images_dir, 'kmnist_approx_block_sizes_error_bars_angles_{}.pdf'.format(angles)), bbox_inches='tight', pad_inches=0.)

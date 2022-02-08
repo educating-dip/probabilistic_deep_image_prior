@@ -12,7 +12,7 @@ RUN_FILE = '/localdata/jleuschn/experiments/dip_bayesian_ext/kmnist_refined_tv_s
 RUN_FILE_APPROX = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx_exact_density_block_sizes.yaml'
 DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
 
-def get_approx_log_prob(run_path, num_samples, ddof=1):  # using less biased estimate of std because we only take 5 samples (by default)
+def get_approx_log_prob(run_path, num_samples, ddof=0):
     log_probs = []
     for i in range(num_samples):
         predictive_image_log_prob_dict = torch.load(os.path.join(run_path, 'predictive_image_log_prob_{}.pt'.format(i)), map_location='cpu')
@@ -23,7 +23,7 @@ def get_approx_log_prob(run_path, num_samples, ddof=1):  # using less biased est
         'mean': np.mean(log_probs),
         'std_error': np.std(log_probs, ddof=ddof) / np.sqrt(num_samples)}
 
-def get_exact_log_probs(run_path, num_samples, ddof=1):  # using less biased estimate of std because we only take 5 samples (by default)
+def get_exact_log_probs(run_path, num_samples, ddof=0):
     log_probs_mll = []
     log_probs_tv_map = []
     for i in range(num_samples):
