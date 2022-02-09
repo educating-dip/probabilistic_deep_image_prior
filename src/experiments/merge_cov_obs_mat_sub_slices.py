@@ -20,7 +20,7 @@ from scalable_linearised_laplace import (
         get_image_block_masks, get_prior_cov_obs_mat, clamp_params)
 
 ### Merges the results from a complete set of runs of
-### ``assemble_cov_obs_mat.py`` with sub-slicing (specified via
+### ``assemble_cov_obs_mat.py`` with sub-slicing (the runs are specified via
 ### `density.merge_cov_obs_mat_sub_slices.load_path_list`).
 
 @hydra.main(config_path='../cfgs', config_name='config')

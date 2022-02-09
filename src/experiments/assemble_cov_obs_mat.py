@@ -19,14 +19,13 @@ from scalable_linearised_laplace import (
         get_predictive_cov_image_block, predictive_image_block_log_prob,
         get_image_block_masks, get_prior_cov_obs_mat, clamp_params)
 
-### Compute a single block
-### (specified via `density.assemble_cov_obs_mat.block_idx`) of
-### the predictive covariance matrix based on the model and mrglik-optimization
-### results of a previous run (specified via
+### Assemble the covariance matrix in observation space based on the model and
+### mrglik-optimization results of a `bayes_dip.py` run (specified via
 ### `density.assemble_cov_obs_mat.load_path`).
-### This allows to parallelize with multiple jobs; after all jobs are finished,
-### the approx. predictive log prob can be evaluated with
-### ``merge_single_block_predictive_image_log_probs.py``.
+### By specifying different values for
+### `density.assemble_cov_obs_mat.sub_slice_batches`, one can parallelize the
+### computation and afterwards merge results using
+### `merge_cov_obs_mat_sub_slices.py`.
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:

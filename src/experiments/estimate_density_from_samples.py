@@ -22,14 +22,11 @@ from scalable_linearised_laplace import (
         stabilize_prior_cov_obs_mat, clamp_params)
 from dataset.walnut import get_inner_block_indices
 
-### Compute a single block
-### (specified via `density.compute_single_predictive_cov_block.block_idx`) of
-### the predictive covariance matrix based on the model and mrglik-optimization
-### results of a previous run (specified via
-### `density.compute_single_predictive_cov_block.load_path`).
-### This allows to parallelize with multiple jobs; after all jobs are finished,
-### the approx. predictive log prob can be evaluated with
-### ``merge_single_block_predictive_image_log_probs.py``.
+### Estimate blocks of the predictive covariance matrix using samples.
+### The samples are drawn based on the result from a `bayes_dip.py` run
+### (specified via `density.compute_single_predictive_cov_block.load_path`);
+### alternatively, the samples can be loaded from previous runs of this script
+### (specified via `density.estimate_density_from_samples.samples_load_path_list`).
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
