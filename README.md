@@ -30,42 +30,40 @@ The sparse ray transform matrix for the fan-beam like 2D sub-geometry is include
 
 The process is split into the following steps (commands are exemplary):
 
-1.  Obtain an EDIP reconstruction.
-    ```shell
+### 1.  Obtain an EDIP reconstruction.
+```shell
 python pretrain.py data=walnut trafo=walnut_ray_trafo net=walnut_unet trn.batch_size=4
-```
-    ```shell
-python dip.py data=walnut trafo=walnut_ray_trafo net=walnut_unet
+python dip.py data=walnut trafo=walnut_ray_trafo net=walnut_unet net.learned_params_path=...
 ```
 
-   The results from such runs are included in this repository under `src/experiments/` and preconfigured in `src/cfgs/net/walnut_unet.yaml` (options `net.learned_params_path` and `net.finetuned_params_path`).
+The results from such runs are included in this repository under `src/experiments/` and preconfigured in `src/cfgs/net/walnut_unet.yaml` (options `net.learned_params_path` and `net.finetuned_params_path`).
 
-2.  Run Bayes-DIP likelihood optimization.
-    ```shell
+### 2.  Run Bayes-DIP likelihood optimization.
+```shell
 python bayes_dip.py data=walnut net=walnut_unet trafo=walnut_ray_trafo linearize_weights=True lin_params.iterations=1500 mrglik.optim.include_predcp=True mrglik.priors.clamp_variances_min_log=-6.9 mrglik.optim.tv_samples=20 mrglik.impl.vec_batch_size=10 mrglik.optim.iterations=2000
 ```
 
-    This runs Bayes-DIP (TV-MAP); in order to run Bayes-DIP (MLL), specify `mrglik.optim.include_predcp=False` (instead of `...=True`).
+This runs Bayes-DIP (TV-MAP); in order to run Bayes-DIP (MLL), specify `mrglik.optim.include_predcp=False` (instead of `...=True`).
 
-    Let the output path of this step be `$OUTPUT_BAYES_DIP`.
+Let the output path of this step be `$OUTPUT_BAYES_DIP`.
 
-3.  Assemble covariance matrix in observation space (`K_{yy}`).
-    ```shell
+### 3.  Assemble covariance matrix in observation space (`K_{yy}`).
+```shell
 python assemble_cov_obs_mat.py data=walnut trafo=walnut_ray_trafo net=walnut_unet use_double=True mrglik.impl.vec_batch_size=1 mrglik.priors.clamp_variances=False density.assemble_cov_obs_mat.load_path=$OUTPUT_BAYES_DIP density.assemble_cov_obs_mat.load_mrglik_opt_iter=1599
 ```
 
-    Let the output path of this step be `$OUTPUT_ASSEMBLE_COV_OBS_MAT`.
+Let the output path of this step be `$OUTPUT_ASSEMBLE_COV_OBS_MAT`.
 
-4.  Generate samples from the predictive posterior.
-    ```shell
+### 4.  Generate samples from the predictive posterior.
+```shell
 python estimate_density_from_samples.py use_double=True data=walnut trafo=walnut_ray_trafo net=walnut_unet mrglik.impl.vec_batch_size=1 density.compute_single_predictive_cov_block.block_idx=walnut_inner density.block_size_for_approx=2 density.compute_single_predictive_cov_block.load_path=$OUTPUT_BAYES_DIP density.compute_single_predictive_cov_block.load_mrglik_opt_iter=1599 mrglik.priors.clamp_variances=False density.compute_single_predictive_cov_block.cov_obs_mat_load_path=$OUTPUT_ASSEMBLE_COV_OBS_MAT density.cov_obs_mat_eps_mode=abs density.cov_obs_mat_eps=0.1 density.num_mc_samples=8192 density.estimate_density_from_samples.seed=100
 ```
 
-    The sampling can be run in parallel, choosing a different seed (`density.estimate_density_from_samples.seed`) for each run. The saved samples from all runs can then be loaded in the next step.
+The sampling can be run in parallel, choosing a different seed (`density.estimate_density_from_samples.seed`) for each run. The saved samples from all runs can then be loaded in the next step.
 
-    Let the output paths of this step be `$OUTPUT_SAMPLES_0` and `$OUTPUT_SAMPLES_1`.
+Let the output paths of this step be `$OUTPUT_SAMPLES_0` and `$OUTPUT_SAMPLES_1`.
 
 5.  Evaluate approximate density based on samples for any patch size (option `density.block_size_for_approx`).
-    ```shell
+```shell
 python estimate_density_from_samples.py use_double=True data=walnut trafo=walnut_ray_trafo net=walnut_unet mrglik.impl.vec_batch_size=1 density.compute_single_predictive_cov_block.block_idx=walnut_inner density.block_size_for_approx=2 density.compute_single_predictive_cov_block.load_path=$OUTPUT_BAYES_DIP density.compute_single_predictive_cov_block.load_mrglik_opt_iter=1599 mrglik.priors.clamp_variances=False density.compute_single_predictive_cov_block.cov_obs_mat_load_path=$OUTPUT_ASSEMBLE_COV_OBS_MAT density.cov_obs_mat_eps_mode=abs density.cov_obs_mat_eps=0.1 density.estimate_density_from_samples.samples_load_path_list=[$OUTPUT_SAMPLES_0,$OUTPUT_SAMPLES_1]
 ```
