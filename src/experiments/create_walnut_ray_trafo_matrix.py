@@ -11,7 +11,7 @@ PROJ_COL_SUB_SAMPLING = 6  # 768 -> 128
 WALNUT_ID = 1
 ORBIT_ID = 2
 
-DATA_PATH = '/localdata/jleuschn/Walnuts/'
+DATA_PATH = '/localdata/Walnuts/'
 OUTPUT_PATH = DATA_PATH
 
 save_single_slice_ray_trafo_matrix(

@@ -8,9 +8,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-RUN_FILE = '/localdata/jleuschn/experiments/dip_bayesian_ext/kmnist_refined_tv_strength.yaml'
-RUN_FILE_APPROX = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx_exact_density_block_sizes.yaml'
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
+RUN_FILE = '/localdata/experiments/dip_bayesian_ext/kmnist_refined_tv_strength.yaml'
+RUN_FILE_APPROX = '/localdata/experiments/dip_bayesian_ext/runs_kmnist_approx_exact_density_block_sizes.yaml'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext'
 
 def get_approx_log_prob(run_path, num_samples, ddof=0):
     log_probs = []

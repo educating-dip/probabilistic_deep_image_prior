@@ -8,9 +8,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-RUN_FILE_APPROX_EXACT_DENSITY = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx_exact_density_block_sizes.yaml'
-RUN_FILE_APPROX_SAMPLES = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx_samples_eval.yaml'
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
+RUN_FILE_APPROX_EXACT_DENSITY = '/localdata/experiments/dip_bayesian_ext/runs_kmnist_approx_exact_density_block_sizes.yaml'
+RUN_FILE_APPROX_SAMPLES = '/localdata/experiments/dip_bayesian_ext/runs_kmnist_approx_samples_eval.yaml'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext'
 IMAGES_DIR='./images_kmnist'
 
 def errorfill(x, y, yerr, color=None, alpha_fill=0.3, line_alpha=1, ax=None, lw=1, linestyle='-', fill_linewidths=0.2):

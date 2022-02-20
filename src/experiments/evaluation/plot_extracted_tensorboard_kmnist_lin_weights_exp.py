@@ -16,7 +16,7 @@ except ModuleNotFoundError:
     TF_AVAILABLE = False
 from tqdm import tqdm
 
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext'
 OUT_PATH = './images_kmnist'
 
 def get_line_kwargs(kws=None, add_highlight_kws=None):
@@ -271,7 +271,7 @@ def plot():
     highlight_idx = 0
 
     run_path = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-25T18:39:01.923124Z'
-    run_path_lin = '/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-25T18:39:01.924045Z'
+    run_path_lin = '/localdata/experiments/dip_bayesian_ext/outputs/2022-01-25T18:39:01.924045Z'
     run_path = os.path.join(DIR_PATH, 'outputs', run_path.split('/outputs/')[-1])  # translate to local path
     run_path_lin = os.path.join(DIR_PATH, 'outputs', run_path_lin.split('/outputs/')[-1])  # translate to local path
 

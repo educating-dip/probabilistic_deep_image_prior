@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 from tqdm import tqdm
 from omegaconf import OmegaConf
 
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext/'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext/'
 OUT_PATH = './images_walnut'
 
 # run_path_mll_for_sigma_y = 'outputs/2022-01-13T00:14:58.653648Z'

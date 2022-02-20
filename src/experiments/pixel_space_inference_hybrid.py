@@ -59,7 +59,7 @@ noise_std_prop = args.noise_perc # 0.1
 
 op_mat = gen_op_mat(img_side, num_angles)
 
-kmnist_path = '/scratch4/ja666/dip_bayesian_ext/kmnist'
+kmnist_path = 'kmnist'  # TODO insert absolute path if needed
 # kmnist_path = './data/kmnist'
 
 train_dset = iter(load_KMNIST_dataset(kmnist_path, batchsize=1, train=True))

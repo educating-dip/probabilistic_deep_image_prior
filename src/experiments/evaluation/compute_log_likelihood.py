@@ -28,7 +28,7 @@ def compute_test_log_liks(path, num_images):
     return compute_mean_and_standard_error(test_log_lik['det.unit-var']), compute_mean_and_standard_error(test_log_lik['det.']), \
         compute_mean_and_standard_error(test_log_lik['mll']), compute_mean_and_standard_error(test_log_lik['map'])
 
-DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
 experiment_name = 'kmnist'
 runs = OmegaConf.load(os.path.join(DIRPATH, 'kmnist_refined_tv_strength.yaml')) # 'runs.yaml'))
 rows = ['DIP ($\sigma^2_y$ = 1)', 'DIP (MLL $\sigma^2_y$)', 'Bayes DIP MLL', 'Bayes DIP TV-MAP']

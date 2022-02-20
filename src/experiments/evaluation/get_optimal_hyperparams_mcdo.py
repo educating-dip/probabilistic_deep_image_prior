@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 def load_data_from_path(path):
     return np.load(os.path.join(path, 'overall_metrics9.npz'), allow_pickle=True)['avg_image_metric']
 
-DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
 runs = OmegaConf.load(os.path.join(DIRPATH, 'grid_search_runs_mcdo.yaml'))
 # gathering data
 for num_angles in [5, 10, 20, 30]:

@@ -128,7 +128,7 @@ if __name__ == '__main__':
 
     title = '{}: angles={}, noise={}'.format(name, angles, noise)
 
-    with open('/localdata/jleuschn/experiments/dip_bayesian_ext/{}_hyper_param_search_experiments.txt'.format(name)) as f:
+    with open('/localdata/experiments/dip_bayesian_ext/{}_hyper_param_search_experiments.txt'.format(name)) as f:
         for line in f:
             line = line.strip()
             if not line:

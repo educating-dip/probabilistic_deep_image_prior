@@ -15,7 +15,7 @@ from deep_image_prior.utils import PSNR, SSIM
 from dataset.utils import get_standard_ray_trafos
 from dataset import extract_trafos_as_matrices
 
-DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
 
 set_xlim_dict = {
     (5, 0.05): 0.90, 

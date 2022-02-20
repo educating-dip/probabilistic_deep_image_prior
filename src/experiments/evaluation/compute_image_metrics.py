@@ -30,7 +30,7 @@ def compute_test_image_metrics(path, num_images):
         ssims.append(SSIM(recon.squeeze(), image.squeeze()))
     return np.mean(psnrs), np.mean(ssims)
 
-DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
 experiment_name = 'kmnist'
 runs = OmegaConf.load(os.path.join(DIRPATH, 'kmnist_refined_tv_strength.yaml')) # 'runs.yaml'))
 

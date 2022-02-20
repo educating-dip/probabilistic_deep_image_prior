@@ -147,7 +147,7 @@ def gather_data_from_bayes_dip(path_to_data, idx):
 
 def gather_priors_data_from_HMC_experiments():
 
-    path_to_priors_data = '/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/good_HMC/prior_HMC/prior_samples.pickle'
+    path_to_priors_data = 'good_HMC/prior_HMC/prior_samples.pickle'  # TODO insert absolute path if needed
     file = open(path_to_priors_data, 'rb')
     prior_sample_dict = pickle.load(file, encoding='unicode_escape')
     return {'samples_from_tv': prior_sample_dict['TV_samples'], 
@@ -189,7 +189,7 @@ def gather_posterior_data_from_HMC_experiment_(path_to_data, name_folder, method
 
 def load_testset_KMNIST_dataset(path='kmnist', batchsize=1,
                                crop=False):
-    path = os.path.join('/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts', path)
+    # path = os.path.join('', path)  # TODO insert absolute path if needed
     testset = datasets.KMNIST(root=path, train=False, download=True,
                                 transform=transforms.Compose([
                                 transforms.ToTensor(),
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         'stddev': 0.05, 
     }
 
-    DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+    DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
     runs = OmegaConf.load(os.path.join(DIRPATH, 'kmnist_refined_tv_strength.yaml')) #  'runs.yaml'))
     path_to_data = runs[dic['num_angles']][dic['stddev']] # kmnist[num_angles][stddev][0]['path'] runs.kmnist[dic['num_angles']][dic['stddev']][0]['path']
     exp_conf = OmegaConf.load(os.path.join(path_to_data, '.hydra/config.yaml'))
@@ -257,17 +257,17 @@ if __name__ == "__main__":
         posterior_samples['map'].append(draw_samples_from_Gaussian(torch.from_numpy(recon), torch.from_numpy(pred_cov_matrix_tv_map)))
 
     posterior_tv_samples = gather_posterior_data_from_HMC_experiment_(
-        path_to_data='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/good_HMC/posterior_samples', 
+        path_to_data='good_HMC/posterior_samples',  # TODO insert absolute path if needed
         name_folder='TV_HMC_{}_{}'.format(5, 0.1).replace('.', ''), 
         method='samples_from_tv')
 
     posterior_gaussian_samples = gather_posterior_data_from_HMC_experiment_(
-        path_to_data='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/good_HMC/posterior_samples/', 
+        path_to_data='good_HMC/posterior_samples/',  # TODO insert absolute path if needed
         name_folder='Gaussian_HMC_{}_{}'.format(5, 0.1).replace('.', ''), 
         method='samples_from_gauss')
 
     posterior_hybrid_samples = gather_posterior_data_from_HMC_experiments(
-        path_to_data='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/good_HMC/Hybrid_data/', 
+        path_to_data='good_HMC/Hybrid_data/',  # TODO insert absolute path if needed
         name_folder='Hybrid_HMC_{}_{}'.format(5, 0.1).replace('.', ''), 
         method= 'samples_from_hybrid')
 

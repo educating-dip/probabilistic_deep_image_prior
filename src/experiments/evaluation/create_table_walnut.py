@@ -17,7 +17,7 @@ from dataset.walnuts_interface import get_single_slice_ray_trafo, get_projection
 from dataset.utils import get_standard_ray_trafos
 from scalable_linearised_laplace import get_image_block_mask_inds
 
-DIR_PATH='/localdata/jleuschn/experiments/dip_bayesian_ext/'
+DIR_PATH='/localdata/experiments/dip_bayesian_ext/'
 
 # run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
 # # run_path_mll = 'outputs/2022-01-20T11:29:58.458635Z'  # no sigma_y override, Kyy eps abs 0.1

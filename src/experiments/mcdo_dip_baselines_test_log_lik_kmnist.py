@@ -86,7 +86,7 @@ def coordinator(cfg : DictConfig) -> None:
             num_samples = 10000
             if cfg.baseline.name == 'mcdo':
                 bayesianize_architecture(reconstructor.model, p=cfg.baseline.p)
-                DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/kmnist_mcdo_baseline.yaml'
+                DIRPATH='src/experiments/evaluation/kmnist_mcdo_baseline.yaml'  # TODO insert absolute path if needed
                 path_to_model = os.path.join(OmegaConf.load(DIRPATH)[cfg.beam_num_angle][cfg.noise_specs.stddev], 'dip_model_{}.pt'.format(i))
                 reconstructor.model.load_state_dict(torch.load(path_to_model, map_location=reconstructor.device))
                 sample_recon = sample_from_bayesianized_model(reconstructor.model, filtbackproj.to(reconstructor.device), mc_samples=num_samples)

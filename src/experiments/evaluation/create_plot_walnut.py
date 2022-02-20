@@ -17,7 +17,7 @@ from dataset.walnuts_interface import get_single_slice_ray_trafo, get_projection
 from dataset.utils import get_standard_ray_trafos
 from scalable_linearised_laplace import get_image_block_mask_inds
 
-DIR_PATH='/localdata/jleuschn/experiments/dip_bayesian_ext/'
+DIR_PATH='/localdata/experiments/dip_bayesian_ext/'
 IMAGES_DIR='./images_walnut'
 
 # run_path_mll = 'outputs/2022-01-18T22:28:49.118309Z'
@@ -62,28 +62,6 @@ run_path_mcdo = 'outputs/2022-01-26T12:48:23.773875Z'
 # run_path_map = 'outputs/2022-01-26T12:05:16.778534Z'  # tv 50
 # # run_path_map = 'outputs/2022-01-26T12:17:32.412439Z'  # tv 5
 # run_path_mcdo = 'outputs/2022-01-26T12:49:52.534479Z'
-
-# # runs with less clamping (-6.9), no sigma_y override
-# # no pred cp, Kyy eps abs 0.1
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:35:48.232522Z  # 1x1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:55:03.152392Z  # 2x2
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:07:51.728686Z  # 4x4 running
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:08:01.054439Z  # 8x8 running
-# # pred cp, tv strength 50, Kyy eps abs 0.1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-25T23:01:38.312512Z  # 1x1
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T00:52:20.554709Z  # 2x2
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:04:20.319776Z  # 4x4 running
-# sftp://jleuschn@brain.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:05:16.778534Z  # 8x8 running
-# # pred cp, tv strength 5, Kyy eps abs 0.1
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:15:47.785793Z  # 1x1 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:16:43.417979Z  # 2x2 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:16:58.319795Z  # 4x4 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:17:32.412439Z  # 8x8 running
-# # mcdo
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:48:23.773875Z  # 1x1 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T13:36:28.182717Z  # 2x2 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T13:25:49.279219Z  # 4x4 running
-# sftp://jleuschn@briareos.math.uni-bremen.de:22/localdata/jleuschn/experiments/dip_bayesian_ext/outputs/2022-01-26T12:49:52.534479Z  # 8x8 running
 
 name = 'walnut'
 

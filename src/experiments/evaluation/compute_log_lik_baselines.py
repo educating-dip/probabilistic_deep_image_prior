@@ -18,7 +18,7 @@ def compute_test_log_liks(path, num_images):
         list_test_log_liks.append(test_log_lik)
     return compute_mean_and_standard_error(list_test_log_liks)
 
-DIRPATH='/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/dip_bayesian_ext/src/experiments/evaluation/'
+DIRPATH='src/experiments/evaluation/'  # TODO insert absolute path if needed
 experiment_name = 'kmnist'
 rows = ['DIP-MCDO', 'DIP-SGLD']
 

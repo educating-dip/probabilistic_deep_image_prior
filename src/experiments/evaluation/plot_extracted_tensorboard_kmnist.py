@@ -16,8 +16,8 @@ except ModuleNotFoundError:
     TF_AVAILABLE = False
 from tqdm import tqdm
 
-RUN_FILE = '/localdata/jleuschn/experiments/dip_bayesian_ext/kmnist_refined_tv_strength.yaml'
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
+RUN_FILE = '/localdata/experiments/dip_bayesian_ext/kmnist_refined_tv_strength.yaml'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext'
 OUT_PATH = './images_kmnist'
 
 def get_line_kwargs(kws=None, add_highlight_kws=None):

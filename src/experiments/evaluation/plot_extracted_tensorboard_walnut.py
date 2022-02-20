@@ -20,7 +20,7 @@ from omegaconf import OmegaConf
 # variant = 'no_clamping'
 variant = ''
 
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext/'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext/'
 OUT_PATH = './images_walnut'
 
 # if variant == 'no_clamping':

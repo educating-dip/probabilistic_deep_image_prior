@@ -17,9 +17,9 @@ except ModuleNotFoundError:
     TF_AVAILABLE = False
 from tqdm import tqdm
 
-RUN_FILE_APPROX_NO_PRECOND = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx_no_precond.yaml'
-RUN_FILE_APPROX = '/localdata/jleuschn/experiments/dip_bayesian_ext/runs_kmnist_approx.yaml'
-DIR_PATH = '/localdata/jleuschn/experiments/dip_bayesian_ext'
+RUN_FILE_APPROX_NO_PRECOND = '/localdata/experiments/dip_bayesian_ext/runs_kmnist_approx_no_precond.yaml'
+RUN_FILE_APPROX = '/localdata/experiments/dip_bayesian_ext/runs_kmnist_approx.yaml'
+DIR_PATH = '/localdata/experiments/dip_bayesian_ext'
 OUT_PATH = './images_kmnist'
 
 # def get_line_kwargs(kws=None, add_highlight_kws=None):
