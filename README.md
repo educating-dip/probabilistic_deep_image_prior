@@ -26,7 +26,7 @@ On the Walnut data, a scalable approach involving approximations is needed.
 
 As a preliminary, the walnut data needs to be placed in `src/experiments/walnuts`: Download [Walnut1.zip](https://zenodo.org/record/2686726/files/Walnut1.zip?download=1) and unzip to `src/experiments/walnuts/Walnut1`. The data is described in Der Sarkissian et al., ["A Cone-Beam X-Ray CT Data Collection Designed for Machine Learning"](https://doi.org/10.1038/s41597-019-0235-y), _Sci Data_ **6**, 215 (2019); see also [the containing Zenodo record](https://zenodo.org/record/2686726/) and [this code repository](https://github.com/cicwi/WalnutReconstructionCodes).
 
-The sparse ray transform matrix for the fan-beam like 2D sub-geometry is included in this repository and can be used as is (`src/experiments/walnuts/single_slice_ray_trafo_matrix_walnut1_orbit2_ass20_css6.mat`, created with `src/experiments/create_walnut_ray_trafo_matrix.py`).
+The sparse ray transform matrix for the fan-beam like 2D sub-geometry can be downloaded from the [here](https://zenodo.org/record/6141017/files/single_slice_ray_trafo_matrix_walnut1_orbit2_ass20_css6.mat?download=1) and needs to be placed in `src/experiments/walnuts/single_slice_ray_trafo_matrix_walnut1_orbit2_ass20_css6.mat`; alternatively, it can be created with `src/experiments/create_walnut_ray_trafo_matrix.py`.
 
 The process is split into the following steps (commands are exemplary):
 
@@ -36,7 +36,7 @@ python pretrain.py data=walnut trafo=walnut_ray_trafo net=walnut_unet trn.batch_
 python dip.py data=walnut trafo=walnut_ray_trafo net=walnut_unet net.learned_params_path=...
 ```
 
-The results from such runs are included in this repository under `src/experiments/` and preconfigured in `src/cfgs/net/walnut_unet.yaml` (options `net.learned_params_path` and `net.finetuned_params_path`).
+The results from such runs can be downloaded from the [supplementing material Zenodo record](https://zenodo.org/record/6141017/) ([pretrain](https://zenodo.org/record/6141017/files/walnut_pretraining.zip?download=1), [dip](https://zenodo.org/record/6141017/files/walnut_edip.zip?download=1)) and then need to be extracted to `src/experiments/outputs/` and `src/experiments/multirun/`, respectively (the paths are preconfigured in `src/cfgs/net/walnut_unet.yaml`, options `net.learned_params_path` and `net.finetuned_params_path`); alternatively, the commands above may be used to re-run the experiments.
 
 ### 2.  Run Bayes-DIP likelihood optimization
 ```shell
