@@ -1,4 +1,4 @@
-# Bayes-DIP
+# A Probabilistic Deep Image Prior for Computational Tomography
 
 ## Setup environment and paths
 We recommend using a conda environment, which can be created with `bash -i env_info/create_bayes_dip_env.sh -n <environment_name> [--cudatoolkit <cudatoolkit_version>]`.
