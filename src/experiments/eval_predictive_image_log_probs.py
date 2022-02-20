@@ -18,7 +18,6 @@ from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        get_predictive_cov_image_block, predictive_image_block_log_prob,
         get_image_block_masks)
 
 ### Evaluates the results from a set of runs of

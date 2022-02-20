@@ -20,7 +20,7 @@ from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        optim_marginal_lik_low_rank, predictive_image_log_prob, get_prior_cov_obs_mat,
+        optim_marginal_lik_low_rank, get_prior_cov_obs_mat,
         stabilize_prior_cov_obs_mat)
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -161,63 +161,6 @@ def coordinator(cfg : DictConfig) -> None:
             './bayesianized_model_{}.pt'.format(i))
         torch.save({'log_noise_model_variance_obs': log_noise_model_variance_obs},
             './log_noise_model_variance_obs_{}.pt'.format(i))
-
-        if cfg.mrglik.priors.clamp_variances:  # this only has an effect if clamping was turned off during optimization
-            clamp_params(bayesianized_model.gp_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
-            clamp_params(bayesianized_model.normal_log_variances, min=cfg.mrglik.priors.clamp_variances_min_log)
-
-        cov_obs_mat = get_prior_cov_obs_mat(ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model,
-                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                cfg.mrglik.impl.vec_batch_size, use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, add_noise_model_variance_obs=True)
-
-        torch.save({'cov_obs_mat': cov_obs_mat}, './cov_obs_mat_{}.pt'.format(i))
-
-        cov_obs_mat = 0.5 * (cov_obs_mat + cov_obs_mat.T)  # in case of numerical issues leading to asymmetry
-        stabilize_prior_cov_obs_mat(cov_obs_mat, eps_mode=cfg.density.cov_obs_mat_eps_mode, eps=cfg.density.cov_obs_mat_eps)
-
-        lik_hess_inv_diag_mean = None
-        if cfg.name in ['mnist', 'kmnist']:
-            from dataset import extract_trafos_as_matrices
-            import tensorly as tl
-            tl.set_backend('pytorch')
-            # pseudo-inverse computation
-            trafos = extract_trafos_as_matrices(ray_trafos)
-            trafo = trafos[0]
-            if cfg.use_double:
-                trafo = trafo.to(torch.float64)
-            trafo = trafo.to(reconstructor.device)
-            trafo_T_trafo = trafo.T @ trafo
-            U, S, Vh = tl.truncated_svd(trafo_T_trafo, n_eigenvecs=100) # costructing tsvd-pseudoinverse
-            lik_hess_inv_diag_mean = (Vh.T @ torch.diag(1/S) @ U.T * torch.exp(log_noise_model_variance_obs)).diag().mean()
-        elif cfg.name == 'walnut':
-            # pseudo-inverse computation
-            trafo = ray_trafos['ray_trafo_mat'].reshape(-1, np.prod(ray_trafos['space'].shape))
-            if cfg.use_double:
-                trafo = trafo.astype(np.float64)
-            U_trafo, S_trafo, Vh_trafo = scipy.sparse.linalg.svds(trafo, k=100)
-            # (Vh.T S U.T U S Vh)^-1 == (Vh.T S^2 Vh)^-1 == Vh.T S^-2 Vh
-            S_inv_Vh_trafo = scipy.sparse.diags(1/S_trafo) @ Vh_trafo
-            # trafo_T_trafo_inv_diag = np.diag(S_inv_Vh_trafo.T @ S_inv_Vh_trafo)
-            trafo_T_trafo_inv_diag = np.sum(S_inv_Vh_trafo**2, axis=0)
-            lik_hess_inv_diag_mean = np.mean(trafo_T_trafo_inv_diag) * np.exp(log_noise_model_variance_obs.item())
-        print('noise_x_correction_term:', lik_hess_inv_diag_mean)
-
-        approx_log_prob, block_masks, block_log_probs, block_diags, block_eps_values = predictive_image_log_prob(
-                recon.to(reconstructor.device), example_image.to(reconstructor.device),
-                ray_trafos, bayesianized_model, filtbackproj.to(reconstructor.device), reconstructor.model,
-                fwAD_be_model, fwAD_be_modules, log_noise_model_variance_obs,
-                eps_mode=cfg.density.eps_mode, eps=cfg.density.eps, cov_image_eps=cfg.density.cov_image_eps,
-                block_size=cfg.density.block_size_for_approx,
-                vec_batch_size=cfg.mrglik.impl.vec_batch_size, 
-                cov_obs_mat_chol=torch.linalg.cholesky(cov_obs_mat),
-                noise_x_correction_term=lik_hess_inv_diag_mean)
-
-        block_mask_inds = [np.nonzero(mask)[0] for mask in block_masks]
-
-        torch.save({'approx_log_prob': approx_log_prob, 'block_mask_inds': block_mask_inds, 'block_log_probs': block_log_probs, 'block_diags': block_diags, 'block_eps_values': block_eps_values},
-            './predictive_image_log_prob_{}.pt'.format(i))
-        
-        print('approx log prob ', approx_log_prob / example_image.numel())
 
 
 if __name__ == '__main__':
