@@ -26,7 +26,8 @@ This runs Bayes-DIP (TV-MAP); in order to run Bayes-DIP (MLL), specify `mrglik.o
 
 Let the output path of this step be `$OUTPUT_BAYES_DIP`.
 
-### 3.  Assemble covariance matrix in observation space (`K_yy`)
+### 3.  Assemble covariance matrix in observation space
+
 ```shell
 python assemble_cov_obs_mat.py data=walnut trafo=walnut_ray_trafo net=walnut_unet use_double=True mrglik.impl.vec_batch_size=1 mrglik.priors.clamp_variances=False density.assemble_cov_obs_mat.load_path=$OUTPUT_BAYES_DIP density.assemble_cov_obs_mat.load_mrglik_opt_iter=1599
 ```
@@ -39,13 +40,12 @@ python estimate_density_from_samples.py use_double=True data=walnut trafo=walnut
 The sampling can be run in parallel, choosing a different seed (`density.estimate_density_from_samples.seed`) for each run. The saved samples from all runs can then be loaded in the next step.
 Let the output paths of this step be `$OUTPUT_SAMPLES_0` and `$OUTPUT_SAMPLES_1`.
 
-### 5.  Evaluate approximate density based on samples for any patch size (option `density.block_size_for_approx`)
+### 5.  Evaluate approximate density based on samples for any patch size
 ```shell
 python estimate_density_from_samples.py use_double=True data=walnut trafo=walnut_ray_trafo net=walnut_unet mrglik.impl.vec_batch_size=1 density.compute_single_predictive_cov_block.block_idx=walnut_inner density.block_size_for_approx=2 density.compute_single_predictive_cov_block.load_path=$OUTPUT_BAYES_DIP density.compute_single_predictive_cov_block.load_mrglik_opt_iter=1599 mrglik.priors.clamp_variances=False density.compute_single_predictive_cov_block.cov_obs_mat_load_path=$OUTPUT_ASSEMBLE_COV_OBS_MAT density.cov_obs_mat_eps_mode=abs density.cov_obs_mat_eps=0.1 density.estimate_density_from_samples.samples_load_path_list=[$OUTPUT_SAMPLES_0,$OUTPUT_SAMPLES_1]
 ```
 
 We benchmark against [DIP-MCDO](https://proceedings.mlr.press/v121/laves20a.html) and the numerical analysis is reported in the table below 
-
 <p align="center"><img src="https://user-images.githubusercontent.com/47638906/154974779-3f181dcb-7c6d-4495-8875-8ff1a25b7e1c.PNG" width="450px"></p>
 
 ## KMNIST
@@ -55,7 +55,7 @@ python low_rank_obs_space_mrg_lik_opt.py use_double=True net.optim.gamma=1e-4 ne
 ```
 This runs both Bayes-DIP (MLL) and Bayes-DIP (TV-MAP). For each setting (`beam_num_angle`, `noise_specs.stddev`), suitable hyperparameters (`net.optim.gamma`, `net.optim.iterations`) should be selected, which can be found in a comment in `src/experiments/eval_dip_mnist_hyper_param_search.py`.
 
-Again, we benchmark against two probabilistic DIP formulations, [DIP-SGLD](https://people.cs.umass.edu/~zezhoucheng/gp-dip/) and [DIP-MCDO](https://proceedings.mlr.press/v121/laves20a.html) and the numerical analysis is reported in the table below 
+Again, we benchmark against two probabilistic DIP formulations [DIP-MCDO](https://proceedings.mlr.press/v121/laves20a.html) and [DIP-SGLD](https://people.cs.umass.edu/~zezhoucheng/gp-dip/) and the numerical analysis is reported in the table below 
 <p align="center"><img src="https://user-images.githubusercontent.com/47638906/154973023-9c70c260-776d-4ed5-aa74-3d0349a1af79.PNG" width="500px"></p>
 
 ## Setup environment and paths
