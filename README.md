@@ -1,4 +1,4 @@
-# A Probabilistic Deep Image Prior for Computational Tomography
+## A Probabilistic Deep Image Prior for Computational Tomography
 
 ![walnut_1x1](https://user-images.githubusercontent.com/47638906/154972964-feb149ef-1135-4eb8-b8a6-c8292ac8d172.png)
 
