@@ -1,4 +1,4 @@
-## A Probabilistic Deep Image Prior for Computational Tomography
+## A Probabilistic Deep Image Prior for Computational Tomography ([arXiv](https://arxiv.org/pdf/2203.00479.pdf))
 
 ![walnut_1x1](https://user-images.githubusercontent.com/47638906/154972964-feb149ef-1135-4eb8-b8a6-c8292ac8d172.png)
 
@@ -68,3 +68,20 @@ The `src` folder is assumed to be contained in the `PYTHONPATH` environment vari
 Data paths are relative to the current working directory, which is assumed to be `src/experiments` by default.
 Output paths of previous experiments are usually specified as absolute paths when passed as an option to a subsequent experiment.
 
+
+## Citation
+
+If you find this code useful, please consider citing our paper:
+
+> Javier Antorán, Riccardo Barbano, Johannes Leuschner, José Miguel Hernández-Lobato &  Bangti Jin. (2022). A Probabilistic Deep Image Prior for Computational Tomography.
+
+```bibtex
+@misc{antoran2022bayesdip,
+    title={A Probabilistic Deep Image Prior for Computational Tomography},
+    author={Javier Antorán and Riccardo Barbano and Johannes Leuschner and José Miguel Hernández-Lobato and Bangti Jin},
+    year={2022},
+    eprint={2203.00479},
+    archivePrefix={arXiv},
+    primaryClass={stat.ML}
+}
+``` 
