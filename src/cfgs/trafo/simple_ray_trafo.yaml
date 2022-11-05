@@ -1,3 +1,0 @@
-# @package _global_
-beam_num_angle: 10
-size: ${image_specs.size}
