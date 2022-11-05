@@ -180,10 +180,7 @@ def compute_approx_log_det_grad(ray_trafos, filtbackproj,
         grad = (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
         grads[normal_prior.log_variance] = 0.5 * grad
 
-    solves_AJSig = vec_weight_prior_cov_mul_base(bayesianized_model,
-        log_noise_variance_obs_grad_dict['gp_prior'], log_noise_variance_obs_grad_dict['normal_prior'], solves_AJ
-        )    
-    grads[log_noise_model_variance_obs] = 0.5 * (solves_AJSig * cs_probes_AJ).sum(dim=1, keepdim=True).mean(dim=0).detach()
+    grads[log_noise_model_variance_obs] = 0.5 * ( (solves * cs_probes ).sum(dim=0, keepdim=True).mean(dim=1) * torch.exp(log_noise_model_variance_obs) ).detach()
 
     return grads, log_det_term, mean_residual
 

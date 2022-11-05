@@ -145,7 +145,7 @@ def optim_marginal_lik_low_rank(
             obs_log_density = diag_gaussian_log_prob(
                 observation,
                 proj_recon,
-                torch.exp(log_noise_model_variance_obs)
+                torch.exp(0.5 * log_noise_model_variance_obs)
             )
 
             if block_priors.lin_weights is not None:
