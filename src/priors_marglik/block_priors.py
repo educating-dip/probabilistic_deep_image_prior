@@ -159,7 +159,7 @@ class BlocksGPpriors(nn.Module):
         for gp_prior, modules_under_gp_prior in zip(
                 gp_priors, ref_modules_under_gp_priors):
             gp_cov_mat_list += self._gp_prior_cov_mats(gp_prior, modules_under_gp_prior)
-        gp_cov_mat = torch.stack(gp_cov_mat_list)
+        gp_cov_mat = torch.stack(gp_cov_mat_list) if gp_cov_mat_list else torch.empty(0, 1)
         return gp_cov_mat
 
     # normal_idx is relative, i.e. an index in the self.normal_priors list
@@ -194,17 +194,14 @@ class BlocksGPpriors(nn.Module):
 
         if idx is None:
 
-            gp_cov_mat = self.get_gp_prior_cov_mat()
-            normal_cov_mat = self.get_normal_prior_cov_mat()
+            gp_cov_mat = self.get_gp_prior_cov_mat().to(x.device)
+            normal_cov_mat = self.get_normal_prior_cov_mat().to(x.device)
 
             gp_x = x[:, :(gp_cov_mat.shape[0] * gp_cov_mat.shape[-1])]
             normal_x = x[:, (gp_cov_mat.shape[0] * gp_cov_mat.shape[-1]):]
 
-            gp_out = _cov_mat_mul(gp_x, gp_cov_mat)
-            if normal_x.shape[1] != 0:
-                normal_out = _cov_mat_mul(normal_x, normal_cov_mat)
-            else:
-                normal_out = torch.empty(x.shape[0], 0).to(x.device)
+            gp_out = _cov_mat_mul(gp_x, gp_cov_mat) if gp_x.shape[1] != 0 else torch.empty(x.shape[0], 0).to(x.device)
+            normal_out = _cov_mat_mul(normal_x, normal_cov_mat) if normal_x.shape[1] != 0 else torch.empty(x.shape[0], 0).to(x.device)
 
             out = torch.cat([gp_out, normal_out], dim=-1)
 

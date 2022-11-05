@@ -4,9 +4,11 @@ defaults:
   - net: unet
   - lin_params: lin_params
   - mrglik: mrglik
+  - sample_based_mrglik: sample_based_mrglik
   - density: density
   - trn: trainer
   - baseline: mcdo
+  - bed: kmnist
 seed: 1
 linearize_weights: False
 num_images: 1

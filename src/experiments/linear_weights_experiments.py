@@ -109,10 +109,10 @@ def coordinator(cfg : DictConfig) -> None:
         Jac_obs = trafo.to(reconstructor.device) @ Jac
 
         # scaling up 
-        scale_up_weights(reconstructor.model, scale=100)
-        out = reconstructor.model.forward(filtbackproj.to(reconstructor.device))[0].detach().cpu().numpy()
-        print('PSNR:', PSNR(out[0, 0], example_image[0, 0].cpu().numpy()))
-        print('SSIM:', SSIM(out[0, 0], example_image[0, 0].cpu().numpy()))
+        # scale_up_weights(reconstructor.model, scale=100)
+        # out = reconstructor.model.forward(filtbackproj.to(reconstructor.device))[0].detach().cpu().numpy()
+        # print('PSNR:', PSNR(out[0, 0], example_image[0, 0].cpu().numpy()))
+        # print('SSIM:', SSIM(out[0, 0], example_image[0, 0].cpu().numpy()))
 
         # opt-marginal-likelihood w/o predcp
         if cfg.linearize_weights:

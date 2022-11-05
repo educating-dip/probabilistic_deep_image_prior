@@ -48,20 +48,20 @@ class DeepImagePriorReconstructor():
             sigmoid_saturation_thresh= self.cfg.arch.sigmoid_saturation_thresh
             ).to(self.device)
 
-        current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-        comment = 'DIP+TV'
-        logdir = os.path.join(
-            self.cfg.log_path,
-            current_time + '_' + socket.gethostname() + comment)
-        self.writer = tensorboardX.SummaryWriter(logdir=logdir)
-
-    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True, use_tv_loss=True):
+    def reconstruct(self, noisy_observation, fbp=None, ground_truth=None, use_init_model=True, use_tv_loss=True, init_state_dict=None):
 
         if self.cfg.torch_manual_seed:
             torch.random.manual_seed(self.cfg.torch_manual_seed)
 
         if use_init_model: 
             self.init_model()
+
+        current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
+        comment = 'DIP+TV'
+        logdir = os.path.join(
+            self.cfg.log_path,
+            current_time + '_' + socket.gethostname() + comment)
+        self.writer = tensorboardX.SummaryWriter(logdir=logdir)
 
         if self.cfg.load_pretrain_model:
             path = os.path.join(
@@ -71,6 +71,9 @@ class DeepImagePriorReconstructor():
             self.model.load_state_dict(torch.load(path, map_location=self.device))
         else:
             self.model.to(self.device)
+
+        if init_state_dict is not None:
+            self.model.load_state_dict(init_state_dict)
 
         self.model.train()
 

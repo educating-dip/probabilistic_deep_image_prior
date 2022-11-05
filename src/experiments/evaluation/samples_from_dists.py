@@ -1,3 +1,4 @@
+from cProfile import label
 import sys
 sys.path.append('../')
 
@@ -86,14 +87,23 @@ def plot_samples_from_dist(data, legends, scales=None, filename=''):
     matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
     matplotlib.rc('text', usetex=True)
 
-    fig, axs = plt.subplots(1, 6, figsize=(11, 2),
-            facecolor='w', edgecolor='k',  gridspec_kw={'width_ratios': [1, 1, 1, 1, 1, 1], 'wspace': 0.05},  constrained_layout=True)
+    fig, axs = plt.subplots(1, 7, figsize=(11, 3),
+            facecolor='w', edgecolor='k',  gridspec_kw={'width_ratios': [1, 1, 1, 1, 1, 1, 1], 'wspace': 0.05},  constrained_layout=True)
 
     kws = dict(histtype= "stepfilled", linewidth = image_dic['hist']['linewidth'], ls='dashed', density=True)
     for i, (ax, plot_data, max_scale) in enumerate(zip(axs.flat, data, scales)):
-        if i == 0:
-            for _, (el,  legend, zorder, color) in enumerate(zip(plot_data, legends, [10, 8, 6, 4, 2, 0], ['#2D4263', '#D9534F', '#3F0071', '#35DCDC', '#5A6C17', '#E2703A'])):
-                ax.hist(el['tv'].flatten(), bins=15, zorder=zorder, facecolor=hex_to_rgb(color, 0.45), edgecolor=hex_to_rgb(color, alpha=1), label=legend, **kws)
+        if i < 2:
+            if i == 0:
+                color_list = ['#2D4263', '#D9534F', '#3F0071', '#E2703A']
+                zorder_list = [6, 4, 2, 0]
+                legend_list = ['TV', 'TV-PredCP', 'Fact. Gauss.', 'KMNIST']
+            if i == 1:
+                color_list = ['#35DCDC', '#5A6C17', '#E2703A']
+                zorder_list = [4, 2, 0]
+                legend_list = ['Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'KMNIST']
+
+            for _, (el, zorder, color, label) in enumerate(zip(plot_data, zorder_list, color_list, legend_list)):
+                ax.hist(el['tv'].flatten(), bins=15, zorder=zorder, facecolor=hex_to_rgb(color, 0.45), edgecolor=hex_to_rgb(color, alpha=1), label=label, **kws)
             if i == 0: ax.set_ylabel('density')
             ax.set_xlabel('average TV')
             ax.spines['top'].set_visible(False)
@@ -101,8 +111,8 @@ def plot_samples_from_dist(data, legends, scales=None, filename=''):
             ax.grid(alpha=0.3)
             ax.set_yscale('log')
             ax.set_aspect( (ax.get_xlim()[1]-ax.get_xlim()[0]) / ( np.log10(ax.get_ylim()[1]) - np.log10(ax.get_ylim()[0])) )
-            ax.legend(ncol=1, bbox_to_anchor= (-0.35, 0.85), frameon=False)
-
+            ax.legend(ncol= 1, bbox_to_anchor=(0, 1.25, 1, 0.2), mode="expand", borderaxespad=0, loc='upper left', frameon=False)
+ 
         else:
             if max_scale != 0: 
                 ax.imshow(plot_data['x'][27].reshape(28,28), cmap='gray', vmin=0, vmax=max_scale)
@@ -110,9 +120,9 @@ def plot_samples_from_dist(data, legends, scales=None, filename=''):
                 ax.imshow(plot_data['x'][0].reshape(28,28), vmin=0, vmax=1, cmap='gray')
             ax.axes.xaxis.set_ticks([])
             ax.axes.yaxis.set_ticks([])
-            ax.set_title(legends[i-1], y=1.01)
+            ax.set_title(legends[i-2], y=1.01)
 
-    fig.savefig(filename + '.png', dpi=100,  bbox_inches='tight')
+    fig.savefig(filename + '.png', dpi=600,  bbox_inches='tight')
     fig.savefig(filename + '.pdf',  bbox_inches='tight')
 
 def n_tv_entries(side):
@@ -218,7 +228,7 @@ if __name__ == "__main__":
 
     dic = {
         'image': 0, 
-        'num_angles': 30, 
+        'num_angles': 20, 
         'stddev': 0.05, 
     }
 
@@ -237,7 +247,6 @@ if __name__ == "__main__":
     for idx in range(50):
         (obs, recon, pred_cov_matrix_mll, pred_cov_matrix_tv_map, prior_cov_matrix_mll, prior_cov_matrix_tv_map) = gather_data_from_bayes_dip(path_to_data, idx)
 
-        breakpoint()
         if idx == 0:
             v_max_mll = 2 * np.mean(prior_cov_matrix_mll[np.diag_indices(784)] **0.5 )
             v_max_map = 2 * np.mean(prior_cov_matrix_tv_map[np.diag_indices(784)] **0.5 ) 
@@ -309,11 +318,15 @@ if __name__ == "__main__":
             priors_hmc_exp_samples['samples_from_tv'], 
             priors_hmc_exp_samples['samples_from_hybrid'], 
             priors_hmc_exp_samples['samples_from_gauss'],
+            apply_tv_to_deep_samples(image_samples)
+        ),
+    
+        (
             apply_tv_to_deep_samples(np.clip(np.concatenate(prior_samples['mll']), a_min=0, a_max=1)), 
             apply_tv_to_deep_samples(np.clip(np.concatenate(prior_samples['map']), a_min=0, a_max=1)), 
             apply_tv_to_deep_samples(image_samples)
         ),
-    
+
         priors_hmc_exp_samples['samples_from_tv'], 
         priors_hmc_exp_samples['samples_from_hybrid'], 
         priors_hmc_exp_samples['samples_from_gauss'],
@@ -321,8 +334,8 @@ if __name__ == "__main__":
         {'x': np.concatenate(prior_samples['map'])},
 
         ),
-        ('TV', 'TV-PredCP', 'Fact. Gauss.', 'Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'KMNIST'),
-        (0, 0, 0, 0, v_max_mll, v_max_map),
+        ('TV', 'TV-PredCP', 'Fact. Gauss.', 'Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'KMNIST', ''),
+        (0, 0, 0, 0, 0, v_max_mll, v_max_map),
         filename= os.path.join(images_dir, 'prior_samples_{}_{}'.format(dic['num_angles'], dic['stddev']).replace('.', ''))
 
     )
@@ -335,6 +348,10 @@ if __name__ == "__main__":
             posterior_tv_samples['samples_from_tv'], 
             posterior_hybrid_samples['samples_from_hybrid'], 
             posterior_gaussian_samples['samples_from_gauss'],
+            apply_tv_to_deep_samples(image_samples)
+        ),
+    
+        (
             apply_tv_to_deep_samples(np.clip(np.concatenate(posterior_samples['mll']), a_min=0, a_max=1)), 
             apply_tv_to_deep_samples(np.clip(np.concatenate(posterior_samples['map']), a_min=0, a_max=1)), 
             apply_tv_to_deep_samples(image_samples)
@@ -347,8 +364,8 @@ if __name__ == "__main__":
         {'x': np.concatenate(posterior_samples['map'])},
 
         ),
-        ('TV', 'TV-PredCP', 'Fact. Gauss.', 'Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'KMNIST'),
-        (0, 0, 0, 0, 0, 0),
+        ('TV', 'TV-PredCP', 'Fact. Gauss.', 'Bayes DIP (MLL)', 'Bayes DIP (TV-MAP)', 'KMNIST', ''),
+        (0, 0, 0, 0, 0, 0, 0),
         filename= os.path.join(images_dir, 'posterior_samples_{}_{}'.format(dic['num_angles'], dic['stddev']).replace('.', ''))
 
     )

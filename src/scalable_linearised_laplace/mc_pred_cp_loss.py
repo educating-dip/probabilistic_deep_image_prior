@@ -28,13 +28,15 @@ def _sample_from_prior_over_weights(bayesianized_model, mc_samples):
     samples_gp_params = torch.randn(
         mc_samples, chol_under_gp_prior.shape[0]*chol_under_gp_prior.shape[1],
                         device=bayesianized_model.store_device)
-    samples_from_gp_priors = fast_prior_cov_mul(
-                                samples_gp_params, chol_under_gp_prior)
+    samples_from_gp_priors = (fast_prior_cov_mul(
+            samples_gp_params, chol_under_gp_prior)
+            if samples_gp_params.shape[1] != 0 else torch.empty(samples_gp_params.shape[0], 0).to(samples_gp_params.device))
     samples_normal_params = torch.randn(
         mc_samples, chol_under_normal_prior.shape[0]*chol_under_normal_prior.shape[1],
                         device=bayesianized_model.store_device)
-    samples_from_normal_priors = fast_prior_cov_mul(
-                                samples_normal_params, chol_under_normal_prior)
+    samples_from_normal_priors = (fast_prior_cov_mul(
+            samples_normal_params, chol_under_normal_prior)
+            if samples_normal_params.shape[1] != 0 else torch.empty(samples_normal_params.shape[0], 0).to(samples_normal_params.device))
     return torch.cat([samples_from_gp_priors, samples_from_normal_priors], dim=-1)
 
 def compute_log_hyperparams_grads(first_derivative_grad_log_hyperparams, second_derivative_grad_log_hyperparams, tv_scaling_fct):

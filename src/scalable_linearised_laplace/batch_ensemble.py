@@ -124,21 +124,22 @@ BATCH_ENSEMBLE_KEEP = (
 
 # model is considered a container that can handle multi-instance input and
 # output, only its submodules are replaced
-def get_batch_ensemble_model(model, num_instances, return_module_mapping=False, use_copy=True, **kwargs):
-    if use_copy:
-        be_model = deepcopy(model)
+def get_batch_ensemble_model(model, num_instances, return_module_mapping=False, **kwargs):
+    be_model = deepcopy(model)
 
     if return_module_mapping:
 
-        if use_copy:
-            module_copies_to_orig_mapping = {copy: old for copy, old in zip(be_model.modules(), model.modules())}
+        module_orig_to_copies_mapping = {old: copy for copy, old in zip(be_model.modules(), model.modules())}
+        module_copies_to_orig_mapping = {copy: old for copy, old in zip(be_model.modules(), model.modules())}
 
-        module_mapping = {}
-        replace_with_batch_ensemble_layers(be_model, num_instances, out_module_mapping=module_mapping, **kwargs)
+        replaced_module_mapping = {}
+        replace_with_batch_ensemble_layers(be_model, num_instances, out_module_mapping=replaced_module_mapping, **kwargs)
 
-        if use_copy:
-            # translate module_copies_mapping ("copy -> new") to original modules "old -> new"
-            module_mapping = {module_copies_to_orig_mapping[copy]: new for copy, new in module_mapping.items()}
+        # translate module_copies_mapping ("copy -> new") to original modules "old -> new"
+        replaced_module_mapping = {module_copies_to_orig_mapping[copy]: new for copy, new in replaced_module_mapping.items()}
+
+        module_mapping = module_orig_to_copies_mapping.copy()
+        module_mapping.update(replaced_module_mapping)
 
         return be_model, module_mapping
 

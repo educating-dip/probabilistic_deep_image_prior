@@ -47,10 +47,10 @@ def coordinator(cfg : DictConfig) -> None:
     be_model, be_module_mapping = get_unet_batch_ensemble(model, num_instances, return_module_mapping=True)
     be_modules = [be_module_mapping[m] for m in modules]
 
-    fwAD_model, fwAD_module_mapping = get_fwAD_model(model, return_module_mapping=True, use_copy='share_parameters')
+    fwAD_model, fwAD_module_mapping = get_fwAD_model(model, return_module_mapping=True, share_parameters=True)
     fwAD_modules = [fwAD_module_mapping[m] for m in modules]
 
-    fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
+    fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, share_parameters=True)
     fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
     x_input = torch.rand((1, 1,) + ray_trafo['reco_space'].shape, device=reconstructor.device)

@@ -2,6 +2,7 @@
 name: mnist
 image_specs:
   size: 28
+angular_sub_sampling: 1
 noise_specs:
   noise_type: white
   stddev: 0.05

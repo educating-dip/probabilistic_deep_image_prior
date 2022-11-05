@@ -16,9 +16,7 @@ from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
-from scalable_linearised_laplace import (
-        add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        get_image_block_masks)
+from scalable_linearised_laplace import get_image_block_mask_inds
 
 ### Evaluates the results from a set of runs of
 ### ``compute_single_predictive_cov_block.py`` (specified via
@@ -50,8 +48,8 @@ def coordinator(cfg : DictConfig) -> None:
     load_cfg = OmegaConf.load(os.path.join(load_path, '.hydra', 'config.yaml'))
     assert load_cfg.name == cfg.name
 
-    block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=load_cfg.density.block_size_for_approx, flatten=True)
-    block_idx_list = cfg.density.re_eval_predictive_image_log_probs.get('block_idx', list(range(len(block_masks))))
+    block_mask_inds = get_image_block_mask_inds(ray_trafos['space'].shape, block_size=load_cfg.density.block_size_for_approx, flatten=True)
+    block_idx_list = cfg.density.re_eval_predictive_image_log_probs.get('block_idx', list(range(len(block_mask_inds))))
     try:
         block_idx_list = list(block_idx_list)
     except TypeError:

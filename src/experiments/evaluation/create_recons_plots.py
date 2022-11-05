@@ -252,26 +252,26 @@ if __name__ == "__main__":
                     example_image, recon, abs_error, std_pred_mll, std_pred_tv_map, 
                     (
                         (abs_error, std_pred_mll, std_pred_tv_map),
-                        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev (MLL)', 'std-dev (TV-MAP)']
+                        ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'std-dev (MLL)', 'std-dev (TV-MAP)']
                     ),
                     filtbackproj,
                     mcdo_recon, mcdo_abs_error, mcdo_std_pred,
                     ( qq_err_mll, qq_err_map, qq_err_mcdo) , 
                     (
                             (mcdo_abs_error, mcdo_std_pred),  
-                            ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'DIP-MCDO']
+                            ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'DIP-MCDO']
                     ),
                     np.transpose(observation),
                     sgld_recon, sgld_abs_error, sgld_std_pred,
                     ( qq_err_mll, qq_err_map, qq_err_sgld), 
                     (
                             (sgld_abs_error, sgld_std_pred),  
-                            ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'DIP-SGLD']
+                            ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'DIP-SGLD']
                     )
                     ),
                     (test_log_lik_mll, test_log_lik_tv_map, mcdo_test_log_lik, sgld_test_log_lik),
                     dir_path + '/main_{}'.format(idx), 
-                    ['${\mathbf{x}}$','${\mathbf{x}^*}$', '${|\mathbf{x} - \mathbf{x}^*|}$', 
+                    ['${\mathbf{x}}$','${\mathbf{f}^\star}$', '${|\mathbf{x} - \mathbf{f}^\star|}$', 
                     'std-dev', 'std-dev',  'marginal std-dev','FBP (i.e.\ ${\\textnormal{A}}^\dagger \mathbf{y}_{\delta})$', '',
                     '', '', 'Calibration: Q-Q', '',
                     '$\mathbf{y}_{\delta}$', '', '', '', '', '']

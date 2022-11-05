@@ -11,10 +11,10 @@ from deep_image_prior import diag_gaussian_log_prob, tv_loss
 from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 
 def marginal_lik_predcp_linear_update(
-    cfg, 
-    block_priors, 
-    Jac_x, 
-    recon, 
+    cfg,
+    block_priors,
+    Jac_x,
+    recon,
     obs_shape
     ):
 
@@ -26,14 +26,14 @@ def marginal_lik_predcp_linear_update(
         succed = False
         cnt = 0
         while not succed:
-            try: 
+            try:
                 dist = \
                     torch.distributions.multivariate_normal.MultivariateNormal(
                         loc=recon,
                         scale_tril=cholesky(cov_ff)
                     )
-                succed = True 
-            except: 
+                succed = True
+            except:
                 cov_ff[np.diag_indices(cov_ff.shape[0])] += 1e-6
                 cnt += 1
             assert cnt < 1000
@@ -68,23 +68,23 @@ def marginal_lik_predcp_linear_update(
 
     for normal_prior in block_priors.normal_priors:
         pass  # TODO
-    
+
     loss = scaling_fct * (torch.stack(expected_tv).sum().detach() - torch.stack(log_det_list).sum().detach())
     return loss
 
 def post_hess_log_det_obs_space(
     block_priors,
     Jac_obs,
-    log_noise_model_variance_obs, 
+    log_noise_model_variance_obs,
     ):
 
     log_prior_det_inv = -block_priors.get_net_log_det_cov_mat()
     Kyy = block_priors.matrix_prior_cov_mul(Jac_obs) @ Jac_obs.T
-    sign, kernel_det = torch.linalg.slogdet( 
+    sign, kernel_det = torch.linalg.slogdet(
         torch.eye(Jac_obs.shape[0], device = log_noise_model_variance_obs.device) * torch.exp(log_noise_model_variance_obs)
         + Kyy)
     assert sign > 0
-    
+
     return log_prior_det_inv - log_noise_model_variance_obs * Jac_obs.shape[0] + kernel_det
 
 def optim_marginal_lik_low_rank(
@@ -127,19 +127,19 @@ def optim_marginal_lik_low_rank(
             if cfg.mrglik.optim.include_predcp:
                 predcp_loss = \
                     marginal_lik_predcp_linear_update(
-                        cfg, 
+                        cfg,
                         block_priors,
                         Jac,
                         recon,
                         observation.numel()
                     )
-            else: 
+            else:
                 predcp_loss = torch.zeros(1)
 
             post_hess_log_det = post_hess_log_det_obs_space(
                 block_priors,
                 Jac_obs,
-                log_noise_model_variance_obs, 
+                log_noise_model_variance_obs,
             )
 
             obs_log_density = diag_gaussian_log_prob(
@@ -148,7 +148,7 @@ def optim_marginal_lik_low_rank(
                 torch.exp(log_noise_model_variance_obs)
             )
 
-            if block_priors.lin_weights is not None: 
+            if block_priors.lin_weights is not None:
                 weight_prior_log_prob = \
                     block_priors.get_net_prior_log_prob_linearized_weights()
             else:

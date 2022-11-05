@@ -466,7 +466,7 @@ def plot_walnut(cfg):
 
     create_image_plot(fig, axs[0], image, title='${\mathbf{x}}$', vmin=0., insets=True, insets_mark_in_orig=True)
     axs[1].set_ylabel('Bayes DIP', fontsize=fs_p1)
-    create_image_plot(fig, axs[1], abs_error, title='$|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_std, insets=True)  #, vmin=vmin_std, vmax=vmax_std)
+    create_image_plot(fig, axs[1], abs_error, title='$|{\mathbf{x} - \mathbf{f}^\star}|$', vmin=0., vmax=vmax_std, insets=True)  #, vmin=vmin_std, vmax=vmax_std)
     create_image_plot(fig, axs[2], std_pred_mll, vmin=0., vmax=vmax_std, title='std-dev', insets=True)  # , vmin=vmin_std, vmax=vmax_std)
     axs[2].set_ylabel('MLL', fontsize=fs_p1)
     add_log_lik(axs[2], log_lik_mll)
@@ -480,7 +480,7 @@ def plot_walnut(cfg):
     create_hist_plot(
         axs[5],
         (inner_abs_error, inner_std_pred_mll, inner_std_pred_map), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- Bayes DIP (MLL)', 'std-dev -- Bayes DIP (TV-MAP)'],
+        ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'std-dev -- Bayes DIP (MLL)', 'std-dev -- Bayes DIP (TV-MAP)'],
         'marginal std-dev',
         False,
         color_list=[color_abs_error, color_mll, color_map],

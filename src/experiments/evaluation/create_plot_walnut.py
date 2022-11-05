@@ -468,7 +468,7 @@ def plot_walnut(cfg):
     vmin_mcdo, vmax_mcdo = min([np.min(abs_error_mcdo), np.min(std_pred_mcdo)]), max([np.max(abs_error_mcdo), np.max(std_pred_mcdo)])
 
     create_image_plot(fig, axs[0, 0], image, title='${\mathbf{x}}$', vmin=0., insets=True, insets_mark_in_orig=True)
-    create_image_plot(fig, axs[0, 2], recon, title='${\mathbf{x}^*}$', vmin=0., insets=True)
+    create_image_plot(fig, axs[0, 2], recon, title='${\mathbf{f}^\star}$', vmin=0., insets=True)
     add_metrics(axs[0, 2], recon[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
     create_image_plot(fig, axs[1, 2], recon_mcdo, vmin=0., insets=True)
     add_metrics(axs[1, 2], recon_mcdo[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
@@ -477,7 +477,7 @@ def plot_walnut(cfg):
     # spacer
     axs[0, 1].remove()
     axs[1, 1].remove()
-    create_image_plot(fig, axs[0, 3], abs_error, title='$|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_map, insets=True, colorbar='invisible')  #, vmin=vmin_map, vmax=vmax_map)
+    create_image_plot(fig, axs[0, 3], abs_error, title='$|{\mathbf{x} - \mathbf{f}^\star}|$', vmin=0., vmax=vmax_map, insets=True, colorbar='invisible')  #, vmin=vmin_map, vmax=vmax_map)
     create_image_plot(fig, axs[1, 3], abs_error_mcdo, vmin=0., insets=True, colorbar=True)  # , vmin=vmin_mcdo, vmax=vmax_mcdo)
     # spacer
     axs[0, 4].remove()
@@ -500,7 +500,7 @@ def plot_walnut(cfg):
     create_hist_plot(
         axs[0, 7],
         (inner_abs_error, inner_std_pred_map), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- Bayes DIP'],
+        ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'std-dev -- Bayes DIP'],
         'marginal std-dev',
         True,
         color_list=[color_abs_error, color_map],
@@ -509,7 +509,7 @@ def plot_walnut(cfg):
     create_hist_plot(
         axs[1, 7],
         (inner_abs_error_mcdo, inner_std_pred_mcdo), 
-        ['$|{\mathbf{x} - \mathbf{x}^*}|$', 'std-dev -- DIP-MCDO'],
+        ['$|{\mathbf{x} - \mathbf{f}^\star}|$', 'std-dev -- DIP-MCDO'],
         '',
         False,
         color_list=[color_abs_error, color_mcdo],

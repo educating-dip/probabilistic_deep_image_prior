@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
+        load_testset_rectangles_dataset, load_testset_walnut_patches_dataset, 
         load_testset_walnut)
 from dataset.mnist import simulate
 import torch
@@ -20,8 +21,7 @@ from priors_marglik import BayesianizeModel
 from linearized_weights import weights_linearization
 from scalable_linearised_laplace import (
         add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        optim_marginal_lik_low_rank, get_prior_cov_obs_mat,
-        stabilize_prior_cov_obs_mat)
+        optim_marginal_lik_low_rank)
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
@@ -45,6 +45,10 @@ def coordinator(cfg : DictConfig) -> None:
         loader = load_testset_KMNIST_dataset()
     elif cfg.name == 'walnut':
         loader = load_testset_walnut(cfg)
+    elif cfg.name == 'rectangles':
+        loader = load_testset_rectangles_dataset(cfg)
+    elif cfg.name == 'walnut_patches':
+        loader = load_testset_walnut_patches_dataset(cfg)
     else:
         raise NotImplementedError
 
@@ -55,8 +59,8 @@ def coordinator(cfg : DictConfig) -> None:
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
-        if cfg.name in ['mnist', 'kmnist']:
-            example_image, _ = data_sample
+        if cfg.name in ['mnist', 'kmnist', 'rectangles', 'walnut_patches']:
+            example_image = data_sample[0] if cfg.name in ['mnist', 'kmnist'] else data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
             ray_trafos['ray_trafo_module_adj'].to(example_image.device)
             if cfg.use_double:
@@ -81,7 +85,7 @@ def coordinator(cfg : DictConfig) -> None:
 
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
-        if cfg.name in ['mnist', 'kmnist']:  
+        if cfg.name in ['mnist', 'kmnist', 'rectangles', 'walnut_patches']:
             if cfg.load_dip_models_from_path is not None:
                 path = os.path.join(cfg.load_dip_models_from_path, 'dip_model_{}.pt'.format(i))
                 print('loading model for {} reconstruction from {}'.format(cfg.name, path))
@@ -136,7 +140,7 @@ def coordinator(cfg : DictConfig) -> None:
         be_model, be_module_mapping = get_unet_batch_ensemble(reconstructor.model, cfg.mrglik.impl.vec_batch_size, return_module_mapping=True)
         be_modules = [be_module_mapping[m] for m in modules]
 
-        fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
+        fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, share_parameters=True)
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
         ray_trafos['ray_trafo_module'].to(bayesianized_model.store_device)
@@ -154,7 +158,6 @@ def coordinator(cfg : DictConfig) -> None:
             ray_trafos, filtbackproj.to(reconstructor.device), bayesianized_model, reconstructor.model, fwAD_be_model, fwAD_be_modules, 
             linearized_weights=linearized_weights, 
             comment = '_recon_num_' + str(i),
-            use_jacobi_vector=cfg.mrglik.impl.use_jacobi_vector,
             )
 
         torch.save(bayesianized_model.state_dict(), 

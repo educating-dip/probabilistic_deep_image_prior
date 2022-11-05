@@ -11,7 +11,7 @@ def get_cov_image_mat(bayesianized_model, jac, eps=None):
 def get_exact_predictive_cov_image_mat(ray_trafos, bayesianized_model, jac, log_noise_model_variance_obs, eps=None, cov_image_eps=None, cov_obs_mat=None):
     device = jac.device
     ray_trafo_mat = torch.from_numpy(ray_trafos['ray_trafo_mat'])
-    ray_trafo_mat = ray_trafo_mat.view(ray_trafo_mat.shape[0] * ray_trafo_mat.shape[1], -1).to(device)
+    ray_trafo_mat = ray_trafo_mat.view(ray_trafo_mat.shape[0] * ray_trafo_mat.shape[1], -1).to(jac.dtype).to(device)
     cov_image_mat = get_cov_image_mat(bayesianized_model, jac, eps=cov_image_eps)
     if cov_obs_mat is None:
         print('computing cov_obs_mat')

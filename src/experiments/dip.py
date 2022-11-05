@@ -5,6 +5,7 @@ from omegaconf import DictConfig
 from dataset.utils import (
         get_standard_ray_trafos,
         load_testset_MNIST_dataset, load_testset_KMNIST_dataset,
+        load_testset_rectangles_dataset,
         load_testset_walnut)
 from dataset.mnist import simulate
 import torch
@@ -13,6 +14,9 @@ from deep_image_prior.utils import PSNR, SSIM
 
 @hydra.main(config_path='../cfgs', config_name='config')
 def coordinator(cfg : DictConfig) -> None:
+
+    if cfg.use_double:
+        torch.set_default_tensor_type(torch.DoubleTensor)
 
     ray_trafos = get_standard_ray_trafos(cfg, return_torch_module=True)
 
@@ -25,6 +29,8 @@ def coordinator(cfg : DictConfig) -> None:
         loader = load_testset_MNIST_dataset()
     elif cfg.name == 'kmnist':
         loader = load_testset_KMNIST_dataset()
+    elif cfg.name == 'rectangles':
+        loader = load_testset_rectangles_dataset(cfg)
     elif cfg.name == 'walnut':
         loader = load_testset_walnut(cfg)
     else:
@@ -37,12 +43,15 @@ def coordinator(cfg : DictConfig) -> None:
         if cfg.seed is not None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
-        if cfg.name in ['mnist', 'kmnist']:
-            example_image, _ = data_sample
+        if cfg.name in ['mnist', 'kmnist', 'rectangles']:
+            example_image = data_sample[0] if cfg.name in ['mnist', 'kmnist'] else data_sample
             ray_trafos['ray_trafo_module'].to(example_image.device)
             ray_trafos['ray_trafo_module_adj'].to(example_image.device)
+            if cfg.use_double:
+                ray_trafos['ray_trafo_module'].to(torch.float64)
+                ray_trafos['ray_trafo_module_adj'].to(torch.float64)
             observation, filtbackproj, example_image = simulate(
-                example_image,
+                example_image.double() if cfg.use_double else example_image,
                 ray_trafos,
                 cfg.noise_specs
                 )
@@ -51,10 +60,18 @@ def coordinator(cfg : DictConfig) -> None:
         else:
             raise NotImplementedError
 
+        if cfg.use_double:
+            observation = observation.double()
+            filtbackproj = filtbackproj.double()
+            example_image = example_image.double()
+
         reconstructor = DeepImagePriorReconstructor(**ray_trafo, cfg=cfg.net)
 
         ray_trafos['ray_trafo_module'].to(reconstructor.device)
         ray_trafos['ray_trafo_module_adj'].to(reconstructor.device)
+        if cfg.use_double:
+            ray_trafos['ray_trafo_module'].to(torch.float64)
+            ray_trafos['ray_trafo_module_adj'].to(torch.float64)
 
         recon, _ = reconstructor.reconstruct(
                 observation, fbp=filtbackproj.to(reconstructor.device), ground_truth=example_image.to(reconstructor.device))

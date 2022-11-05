@@ -282,12 +282,12 @@ def table_walnut(cfg):
     vmax_errors = max(np.max(abs_error), np.max(abs_error_lin_pred_mll))
 
     create_image_plot(fig, axs[0], image, title='${\mathbf{x}}$', vmin=0., vmax=vmax_images, insets=True, insets_mark_in_orig=True)
-    create_image_plot(fig, axs[1], recon, title='DIP: ${\mathbf{x}^*}$', vmin=0., vmax=vmax_images, insets=True)
+    create_image_plot(fig, axs[1], recon, title='DIP: ${\mathbf{f}^\star}$', vmin=0., vmax=vmax_images, insets=True)
     add_metrics(axs[1], recon[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
-    create_image_plot(fig, axs[2], lin_pred_mll, title='linearized: ${\mathbf{x}^*}$', vmin=0., vmax=vmax_images, insets=True, colorbar=True)
+    create_image_plot(fig, axs[2], lin_pred_mll, title='linearized: ${\mathbf{f}^\star}$', vmin=0., vmax=vmax_images, insets=True, colorbar=True)
     add_metrics(axs[2], lin_pred_mll[START_0:END_0, START_1:END_1], image[START_0:END_0, START_1:END_1])
-    create_image_plot(fig, axs[3], abs_error, title='DIP: $|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_errors, insets=True)
-    create_image_plot(fig, axs[4], abs_error_lin_pred_mll, title='linearized: $|{\mathbf{x} - \mathbf{x}^*}|$', vmin=0., vmax=vmax_errors, insets=True, colorbar=True)
+    create_image_plot(fig, axs[3], abs_error, title='DIP: $|{\mathbf{x} - \mathbf{f}^\star}|$', vmin=0., vmax=vmax_errors, insets=True)
+    create_image_plot(fig, axs[4], abs_error_lin_pred_mll, title='linearized: $|{\mathbf{x} - \mathbf{f}^\star}|$', vmin=0., vmax=vmax_errors, insets=True, colorbar=True)
 
     fig.savefig(os.path.join(IMAGES_DIR, f'walnut_lin_reco_{BLOCK_SIZE}x{BLOCK_SIZE}.pdf'), bbox_inches='tight', pad_inches=0.)
     fig.savefig(os.path.join(IMAGES_DIR, f'walnut_lin_reco_{BLOCK_SIZE}x{BLOCK_SIZE}.png'), bbox_inches='tight', pad_inches=0., dpi=600)

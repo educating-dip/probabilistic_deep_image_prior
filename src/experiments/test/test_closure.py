@@ -156,7 +156,7 @@ def coordinator(cfg : DictConfig) -> None:
         be_model, be_module_mapping = get_unet_batch_ensemble(reconstructor.model, v.shape[0], return_module_mapping=True)
         be_modules = [be_module_mapping[m] for m in modules]
 
-        fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, use_copy='share_parameters')
+        fwAD_be_model, fwAD_be_module_mapping = get_fwAD_model(be_model, return_module_mapping=True, share_parameters=True)
         fwAD_be_modules = [fwAD_be_module_mapping[m] for m in be_modules]
 
         if cfg.mrglik.impl.use_fwAD_for_jvp:

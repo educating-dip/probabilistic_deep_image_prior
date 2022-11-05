@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.linalg as linalg
 from collections.abc import Iterable
 from copy import deepcopy
@@ -14,11 +15,15 @@ class BayesianizeModel(nn.Module):
         lengthscale_init,
         variance_init,
         include_normal_priors=True,
+        exclude_gp_priors_list=None,
+        exclude_normal_priors_list=None,
         ):
         
         super().__init__()
         self.store_device = reconstructor.device
         self.include_normal_priors = include_normal_priors
+        self.exclude_gp_priors_list = exclude_gp_priors_list
+        self.exclude_normal_priors_list = exclude_normal_priors_list
         self.gp_priors = nn.ModuleList([])
         self.normal_priors = nn.ModuleList([])
         self.ref_modules_under_gp_priors = []
@@ -29,6 +34,7 @@ class BayesianizeModel(nn.Module):
                     'variance_init': variance_init
                 }
             )
+        self.reduce_priors(exclude_gp_priors_list=exclude_gp_priors_list, exclude_normal_priors_list=exclude_normal_priors_list)
 
         self.ref_num_filters_per_modules_under_gp_priors = self._get_num_filters_under_priors(
                 self.ref_modules_under_gp_priors
@@ -37,8 +43,15 @@ class BayesianizeModel(nn.Module):
         self.ref_num_params_per_modules_under_normal_priors = self._get_num_filters_under_priors(
                 self.ref_modules_under_normal_priors
             )
-
-    
+        
+        self.ref_num_params_per_modules_under_gp_priors = self._get_num_params_under_priors(
+                self.ref_modules_under_gp_priors
+            )
+        
+        self.num_params_under_all_priors = np.sum(
+                self.ref_num_params_per_modules_under_gp_priors + self.ref_num_params_per_modules_under_normal_priors
+            )
+        
     def _extract_blocks_from_model(self, model):
         return [block for block in model.children()]
     
@@ -128,6 +141,14 @@ class BayesianizeModel(nn.Module):
         self.normal_priors.append(normal_prior)
         self.ref_modules_under_normal_priors.append(modules)
 
+    def reduce_priors(self, exclude_gp_priors_list=None, exclude_normal_priors_list=None):
+        if exclude_gp_priors_list is not None:
+            self.gp_priors = nn.ModuleList([p for i, p in enumerate(self.gp_priors) if i not in exclude_gp_priors_list])
+            self.ref_modules_under_gp_priors = [m for i, m in enumerate(self.ref_modules_under_gp_priors) if i not in exclude_gp_priors_list]
+        if exclude_normal_priors_list is not None:
+            self.normal_priors = nn.ModuleList([p for i, p in enumerate(self.normal_priors) if i not in exclude_normal_priors_list])
+            self.ref_modules_under_normal_priors = [m for i, m in enumerate(self.ref_modules_under_normal_priors) if i not in exclude_normal_priors_list]
+
     @property
     def priors(self):
         return chain(self.gp_priors, self.normal_priors)
@@ -195,3 +216,13 @@ class BayesianizeModel(nn.Module):
                 num_filters_per_modules +=  module.in_channels * module.out_channels
             num_filters_under_priors.append(num_filters_per_modules)
         return num_filters_under_priors
+    
+    def _get_num_params_under_priors(self, modules_under_priors):
+
+        num_params_under_priors = []
+        for modules in modules_under_priors:
+            num_params_per_modules = 0
+            for module in modules:
+                num_params_per_modules +=  module.in_channels * module.out_channels * module.kernel_size[0]**2
+            num_params_under_priors.append(num_params_per_modules)
+        return num_params_under_priors

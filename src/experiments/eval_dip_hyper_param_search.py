@@ -1,4 +1,5 @@
 import os
+from math import ceil
 import numpy as np
 from tqdm import tqdm
 from warnings import warn
@@ -98,6 +99,8 @@ def load_or_convert_logs(path, require_num_steps=None):
 # (5, 0.1): (3e-5, 7400),
 # (10, 0.05): (3e-5, 29000),
 # (10, 0.1): (1e-4, 13000),
+# (15, 0.05): (1e-4, 32000),
+# (15, 0.1): (3e-4, 14000),
 # (20, 0.05): (1e-4, 41000),
 # (20, 0.1): (3e-4, 17000),
 # (30, 0.05): (1e-4, 50000),
@@ -116,19 +119,32 @@ def load_or_convert_logs(path, require_num_steps=None):
 # (30, 0.1): (1e-4, 31000),
 # }
 
+### rectangles
+# {
+# (5, 0.05): (3e-3, 19100),
+# (5, 0.1): (1e-2, 11500),
+# (10, 0.05): (3e-3, 9400),
+# (10, 0.1): (1e-2, 7500),
+# (20, 0.05): (3e-3, 11800),
+# (20, 0.1): (3e-3, 7200),
+# (40, 0.05): (1e-3, 13100),
+# (40, 0.1): (3e-3, 7100),
+# }
+
 if __name__ == '__main__':
 
     cfg_list = []
     psnrs_list = []
     best_psnrs_list = []
 
-    name = 'mnist'
-    angles = 5
+    name = 'rectangles'
+    angles = 40
+    suffix = '_{}'.format(angles) if name == 'rectangles' else ''
     noise = 0.1
 
     title = '{}: angles={}, noise={}'.format(name, angles, noise)
 
-    with open('/localdata/experiments/dip_bayesian_ext/{}_hyper_param_search_experiments.txt'.format(name)) as f:
+    with open('/localdata/experiments/dip_bayesian_ext/{}{}_hyper_param_search_experiments.txt'.format(name, suffix)) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -140,7 +156,7 @@ if __name__ == '__main__':
             except FileNotFoundError:
                 print('skipping', path)
                 continue
-            if cfg.name == name and cfg.beam_num_angle == angles and cfg.noise_specs.stddev == noise:
+            if cfg.name == name and ceil(cfg.beam_num_angle / cfg.angular_sub_sampling) == angles and cfg.noise_specs.stddev == noise:
                 psnrs, best_psnrs = load_or_convert_logs(path, require_num_steps=cfg.net.optim.iterations)
                 if len(psnrs) < 10:
                     print('skipping', path)

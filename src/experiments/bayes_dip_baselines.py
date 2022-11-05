@@ -18,7 +18,7 @@ from deep_image_prior.utils import PSNR, SSIM, bayesianize_architecture, sample_
 from dataset import extract_trafos_as_matrices
 from scalable_linearised_laplace import (approx_density_from_samples, approx_kernel_density, 
         approx_predictive_cov_image_block_from_samples, predictive_image_block_log_prob,
-        get_image_block_masks, stabilize_predictive_cov_image_block, stabilize_prior_cov_obs_mat
+        get_image_block_mask_inds, stabilize_predictive_cov_image_block, stabilize_prior_cov_obs_mat
         ) 
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -156,7 +156,7 @@ def coordinator(cfg : DictConfig) -> None:
                 cfg.net.optim.iterations = iterations
                 recon = mc_sample_images.view(num_samples, -1).mean(dim=0).view(*example_image.shape)
 
-            block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
+            all_block_mask_inds = get_image_block_mask_inds(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
             errors = []
             block_diags = []
@@ -175,9 +175,9 @@ def coordinator(cfg : DictConfig) -> None:
 
                 print('starting with block', block_idx)
 
-                mask = block_masks[block_idx]
+                mask_inds = all_block_mask_inds[block_idx]
 
-                mc_sample_image_blocks = mc_sample_images.view(mc_sample_images.shape[0], -1)[:, mask]
+                mc_sample_image_blocks = mc_sample_images.view(mc_sample_images.shape[0], -1)[:, mask_inds]
 
                 predictive_cov_image_block = approx_predictive_cov_image_block_from_samples(
                         mc_sample_image_blocks.to(reconstructor.device), noise_x_correction_term=lik_hess_inv_diag_mean)
@@ -190,8 +190,8 @@ def coordinator(cfg : DictConfig) -> None:
                     for eps_value in eps_sweep_values:
                         try:
                             block_log_prob_with_eps = predictive_image_block_log_prob(
-                                    recon.to(reconstructor.device).flatten()[mask],
-                                    example_image.to(reconstructor.device).flatten()[mask],
+                                    recon.to(reconstructor.device).flatten()[mask_inds],
+                                    example_image.to(reconstructor.device).flatten()[mask_inds],
                                     predictive_cov_image_block + eps_value * torch.eye(predictive_cov_image_block.shape[0], device=predictive_cov_image_block.device))
                         except:
                             block_log_prob_with_eps = None
@@ -200,13 +200,13 @@ def coordinator(cfg : DictConfig) -> None:
                 block_eps = stabilize_predictive_cov_image_block(predictive_cov_image_block, eps_mode=cfg.density.eps_mode, eps=cfg.density.eps)
                 
                 block_log_prob = predictive_image_block_log_prob(
-                        recon.to(reconstructor.device).flatten()[mask],
-                        example_image.to(reconstructor.device).flatten()[mask],
+                        recon.to(reconstructor.device).flatten()[mask_inds],
+                        example_image.to(reconstructor.device).flatten()[mask_inds],
                         predictive_cov_image_block)
 
-                print('sample based log prob for block {}: {}'.format(block_idx, block_log_prob / mask.sum()))
+                print('sample based log prob for block {}: {}'.format(block_idx, block_log_prob / len(mask_inds)))
 
-                predictive_image_log_prob_block_dict = {'mask_inds': np.nonzero(mask)[0], 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag(), 'block_eps': block_eps}
+                predictive_image_log_prob_block_dict = {'mask_inds': mask_inds, 'block_log_prob': block_log_prob, 'block_diag': predictive_cov_image_block.diag(), 'block_eps': block_eps}
                 if cfg.density.compute_single_predictive_cov_block.save_full_block:
                     predictive_image_log_prob_block_dict['block'] = predictive_cov_image_block
                 if cfg.density.do_eps_sweep:
@@ -214,7 +214,7 @@ def coordinator(cfg : DictConfig) -> None:
                     predictive_image_log_prob_block_dict['eps_sweep_block_log_probs'] = eps_sweep_block_log_probs
                    
                 block_diags.append(predictive_image_log_prob_block_dict['block_diag'])
-                block_mask_inds.append(np.nonzero(mask)[0])
+                block_mask_inds.append(mask_inds)
                 block_log_probs.append(predictive_image_log_prob_block_dict['block_log_prob'])
                 block_eps_values.append(predictive_image_log_prob_block_dict['block_eps'])
 

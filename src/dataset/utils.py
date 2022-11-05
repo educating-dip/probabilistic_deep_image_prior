@@ -7,6 +7,8 @@ import torchvision.transforms as transforms
 from odl.contrib.torch import OperatorModule
 from torch.utils.data import DataLoader, TensorDataset
 from hydra.utils import get_original_cwd
+from .rectangles import RectanglesDataset
+from .walnut_patches import WalnutPatchesDataset
 from .walnut import (
         get_walnut_data, get_walnut_single_slice_matrix_ray_trafos,
         get_walnut_proj_numel)
@@ -53,6 +55,25 @@ def load_trainset_KMNIST_dataset(path='kmnist', batchsize=1,
                                 (0.1307,), (0.3081,))]))
     return DataLoader(trainset, batchsize, shuffle=False)
 
+def load_testset_rectangles_dataset(cfg, batchsize=1, fixed_seed=True):
+    testset = RectanglesDataset(image_size=cfg.image_specs.size, num_rects=cfg.num_rects, num_angle_modes=cfg.num_angle_modes, angle_modes_sigma=cfg.angle_modes_sigma, fixed_seed=fixed_seed)
+    return DataLoader(testset, batchsize, shuffle=False)
+
+def load_trainset_rectangles_dataset(cfg, batchsize=1, fixed_seed=42):
+    trainset = RectanglesDataset(image_size=cfg.image_specs.size, num_rects=cfg.num_rects, num_angle_modes=cfg.num_angle_modes, angle_modes_sigma=cfg.angle_modes_sigma, fixed_seed=fixed_seed)
+    return DataLoader(trainset, batchsize, shuffle=False)
+
+def load_testset_walnut_patches_dataset(cfg, batchsize=1, fixed_seed=True):
+
+    testset = WalnutPatchesDataset(
+        image_size=cfg.image_specs.size,
+        data_path=cfg.data_path_test, 
+        walnut_id=cfg.walnut_id,
+        orbit_id=cfg.orbit_id,
+        slice_ind=cfg.slice_ind,
+        fixed_seed=fixed_seed)
+    return DataLoader(testset, batchsize, shuffle=False)
+
 def load_testset_walnut(cfg):
     observation, filtbackproj, ground_truth = get_walnut_data(cfg)
 
@@ -64,7 +85,7 @@ def load_testset_walnut(cfg):
     return DataLoader(testset, 1, shuffle=False)
 
 def get_standard_ray_trafos(cfg, return_torch_module=True,
-                            return_op_mat=False):
+                            return_op_mat=False, override_angular_sub_sampling=None):
 
     ray_trafo_impl = cfg.get('ray_trafo_impl', None)
 
@@ -76,24 +97,30 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
         geometry = odl.tomo.parallel_beam_geometry(space,
                 num_angles=cfg.beam_num_angle)
         ray_trafo = odl.tomo.RayTransform(space, geometry)
-        pseudoinverse = odl.tomo.fbp_op(ray_trafo)
+        angular_sub_sampling = (
+                (1 if not cfg.angular_sub_sampling else cfg.angular_sub_sampling)
+                if override_angular_sub_sampling is None else override_angular_sub_sampling)
+        _ray_trafo_angle_sub_sampling = odl.tomo.RayTransform(space, geometry[::angular_sub_sampling])
+        pseudoinverse = odl.tomo.fbp_op(_ray_trafo_angle_sub_sampling)
         ray_trafo_mat = \
             odl.operator.oputils.matrix_representation(ray_trafo)
+        if angular_sub_sampling != 1:
+            ray_trafo_mat = ray_trafo_mat[::angular_sub_sampling]
         ray_trafo_mat_flat = ray_trafo_mat.reshape(-1, cfg.size**2)
         matrix_ray_trafo = MatrixRayTrafo(ray_trafo_mat_flat,
                 im_shape=(cfg.size, cfg.size),
-                proj_shape=ray_trafo.range.shape)
+                proj_shape=_ray_trafo_angle_sub_sampling.range.shape)
     #     ray_trafo = matrix_ray_trafo.apply
 
         class apply_ray_trafo: 
                 def __call__(self, x):
                     return matrix_ray_trafo.apply(x)
-        ray_trafo_range = ray_trafo.range
+        ray_trafo_range = _ray_trafo_angle_sub_sampling.range
         ray_trafo = apply_ray_trafo()
         ray_trafo.range = ray_trafo_range
         ray_trafo_dict = {
             'space': space,
-            'geometry': geometry,
+            'geometry': geometry[::angular_sub_sampling],
             'ray_trafo': ray_trafo,
             'pseudoinverse': pseudoinverse,
             }
@@ -114,6 +141,7 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
             ray_trafo_dict['ray_trafo_mat_adj'] = ray_trafo_mat_adj
 
     elif ray_trafo_impl == 'custom':
+        assert override_angular_sub_sampling is None
         if cfg.ray_trafo_custom.name == 'walnut_single_slice_matrix':
             ray_trafo_dict = get_walnut_single_slice_matrix_ray_trafos(
                     cfg,
@@ -132,7 +160,7 @@ def get_standard_ray_trafos(cfg, return_torch_module=True,
 def extract_trafos_as_matrices(ray_trafos): 
 
     trafo = torch.from_numpy(ray_trafos['ray_trafo_mat'])
-    trafo = trafo.view(-1, ray_trafos['space'].shape[0]**2)
+    trafo = trafo.reshape(-1, ray_trafos['space'].shape[0]**2)
     trafo_adj = trafo.T
     trafo_adj_trafo = trafo_adj @ trafo
     trafo_trafo_adj = trafo @ trafo_adj

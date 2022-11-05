@@ -14,9 +14,6 @@ from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
-from scalable_linearised_laplace import (
-        add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        get_image_block_masks, get_prior_cov_obs_mat, clamp_params)
 
 ### Merges the results from a complete set of runs of
 ### ``assemble_cov_obs_mat.py`` with sub-slicing (the runs are specified via

@@ -144,9 +144,11 @@ class UpBlock(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        x2 = self.skip_conv(x2)
-        if not self.skip:
-            x2 = x2 * 0
+        if self.skip:
+            x2 = self.skip_conv(x2)
+        else:
+            # leading batch dims like x1, skip_ch=1, image shape like x2
+            x2 = torch.zeros(*x1.shape[:-3], 1, *x2.shape[-2:], dtype=x1.dtype, device=x1.device)
         x = self.concat(x1, x2)
         x = self.conv(x)
         return x

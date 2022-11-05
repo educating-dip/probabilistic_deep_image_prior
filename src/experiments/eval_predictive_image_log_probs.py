@@ -16,9 +16,7 @@ from hydra.utils import get_original_cwd
 from deep_image_prior import DeepImagePriorReconstructor
 from deep_image_prior.utils import PSNR, SSIM
 from priors_marglik import BayesianizeModel
-from scalable_linearised_laplace import (
-        add_batch_grad_hooks, get_unet_batch_ensemble, get_fwAD_model,
-        get_image_block_masks)
+from scalable_linearised_laplace import get_image_block_mask_inds
 
 ### Evaluates the results from a set of runs of
 ### ``compute_single_predictive_cov_block.py`` or ``estimate_density_from_samples.py``
@@ -112,11 +110,11 @@ def coordinator(cfg : DictConfig) -> None:
         recon = recon.to(reconstructor.device)
         example_image = example_image.to(reconstructor.device)
 
-        block_masks = get_image_block_masks(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
+        block_mask_inds = get_image_block_mask_inds(ray_trafos['space'].shape, block_size=cfg.density.block_size_for_approx, flatten=True)
 
         block_idx_list = cfg.density.compute_single_predictive_cov_block.block_idx  # may be used to restrict to a subset of blocks
         if block_idx_list is None:
-            block_idx_list = list(range(len(block_masks)))
+            block_idx_list = list(range(len(block_mask_inds)))
         else:
             try:
                 block_idx_list = list(block_idx_list)
@@ -191,7 +189,7 @@ def coordinator(cfg : DictConfig) -> None:
         for record in metrics_records:
             log_probs_per_method.setdefault(record['method_name'], {})
             log_probs_per_method[record['method_name']][record['block_idx']] = record['log_prob']
-        common_blocks = np.array(range(len(block_masks)))
+        common_blocks = np.array(range(len(block_mask_inds)))
         for method_name, log_probs_dict in log_probs_per_method.items():
             common_blocks = np.intersect1d(common_blocks, list(log_probs_dict.keys()))
         print('number of common blocks for all methods:', len(common_blocks))

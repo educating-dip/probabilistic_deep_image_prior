@@ -90,6 +90,30 @@ class MatrixModule(nn.Module):
         out = out_flat.view(inp.shape[0], inp.shape[1], *self.out_shape)
         return out
 
+class tSVDMatrixModule(nn.Module):
+
+    def __init__(self, tsvd_matrix, out_shape, adjoint=False):
+        
+        super().__init__()
+        U, S, Vh = tsvd_matrix
+        if adjoint:
+            tsvd_matrix = (Vh, S, U)
+            U, S, Vh = tsvd_matrix
+
+        self.register_buffer('U', U, persistent=False)
+        self.register_buffer('S', S, persistent=False)
+        self.register_buffer('Vh', Vh, persistent=False)
+
+        self.out_shape = out_shape
+
+    def forward(self, inp):
+
+        inp_flat = inp.view(inp.shape[0] * inp.shape[1], -1)
+        inp_flat = inp_flat.transpose(1, 0)
+        out_flat = self.U @ ( self.S[:, None] * (self.Vh.T @ inp_flat) )
+        out_flat = out_flat.transpose(1, 0)
+        out = out_flat.view(inp.shape[0], inp.shape[1], *self.out_shape)
+        return out
 
 def get_matrix_ray_trafo_module(matrix, im_shape, proj_shape, adjoint=False,
                                 sparse=True):

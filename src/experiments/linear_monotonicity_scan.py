@@ -14,7 +14,7 @@ from linearized_laplace import submatrix_image_space_lin_model_prior_cov
 import matplotlib 
 import matplotlib.pyplot as plt
 
-def plot_monotonicity_traces(len_vec, overall_tv_samples_list, overall_tv_samples_list_norm, filename):
+def plot_monotonicity_traces(len_vec, overall_tv_samples_list, overall_tv_samples_list_norm, filename, label_list):
 
     fs_m1 = 6  # for figure ticks
     fs = 10    # for regular figure text
@@ -29,31 +29,33 @@ def plot_monotonicity_traces(len_vec, overall_tv_samples_list, overall_tv_sample
     matplotlib.rc('figure', titlesize=fs_p1)   # fontsize of the figure title
     matplotlib.rc('font', **{'family':'serif', 'serif': ['Palatino']})
     matplotlib.rc('text', usetex=True)
-    matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+    # matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
-    fig, axs = plt.subplots(2, 4, figsize=(7.25, 4))
-    titles = ['Down$_0$', 'Down$_1$', 'Up$_0$', 'Up$_1$']
-    for i, (ax, tv_samples_list) in enumerate(zip(axs.flatten(), overall_tv_samples_list)):
+    fig, axs = plt.subplots(2, 5, figsize=(8, 4))
+    for i, (ax, tv_samples_list, label) in enumerate(zip(axs.flatten(), overall_tv_samples_list, label_list)):
 
         ax.plot(len_vec, tv_samples_list, linewidth=2.5, color='#EC2215')
         ax.set_xscale('log')
-        ax.set_title(titles[i], pad=5)
         ax.grid(0.3)
-        ax.set_ylabel('$\kappa$', fontsize=12)
+        if i ==0: ax.set_ylabel('$\kappa$', fontsize=12)
+        ax.set_title(label)
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
         ax.set_xticklabels([' ', ' ', ' ', ' '])
         
-        if i == 3: 
+        if i == 4: 
             break 
     
     for i, (ax, tv_samples_list) in enumerate(zip(axs.flatten()[i+1:], overall_tv_samples_list_norm)):
 
         ax.plot(len_vec, tv_samples_list, linewidth=2.5, color='#EC2215')
         ax.set_xscale('log')
-        ax.set_title(titles[i], pad=5)
         ax.grid(0.3)
-        ax.set_xlabel('$\ell$', fontsize=12)
-        ax.set_ylabel('$\kappa$', fontsize=12)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        if i == 0: ax.set_ylabel('$\kappa$', fontsize=12)
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     
     plt.tight_layout()
@@ -63,7 +65,7 @@ def plot_monotonicity_traces(len_vec, overall_tv_samples_list, overall_tv_sample
 def compute_exptected_tv(reconstructor, recon, Jac_x, cfg, apply_normalization=False): 
 
     len_vec = np.logspace(-2, 2, 500)
-    sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3 = [], [], [], []
+    sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3, sweep_exp_tv_block_4 = [], [], [], [], []
     for lengthscale_init in tqdm(len_vec, leave=False):
         
         bayesianize_model = BayesianizeModel(
@@ -106,8 +108,9 @@ def compute_exptected_tv(reconstructor, recon, Jac_x, cfg, apply_normalization=F
         sweep_exp_tv_block_1.append(expected_tv[1])
         sweep_exp_tv_block_2.append(expected_tv[2])
         sweep_exp_tv_block_3.append(expected_tv[3])
+        sweep_exp_tv_block_4.append(expected_tv[4])
 
-    return  sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3
+    return  sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3, sweep_exp_tv_block_4
 
 
 @hydra.main(config_path='../cfgs', config_name='config')
@@ -133,7 +136,7 @@ def coordinator(cfg : DictConfig) -> None:
             torch.manual_seed(cfg.seed + i)  # for reproducible noise in simulate
 
         # simulate and reconstruct the example image
-        observation, filtbackproj, example_image = simulate(example_image, 
+        _, filtbackproj, example_image = simulate(example_image, 
             ray_trafos, cfg.noise_specs)
         dip_ray_trafo = {'ray_trafo_module': ray_trafos['ray_trafo_module'], 
                         'reco_space': ray_trafos['space']}
@@ -149,12 +152,8 @@ def coordinator(cfg : DictConfig) -> None:
         
         # reconstruction - learning MAP estimate weights
         filtbackproj = filtbackproj.to(reconstructor.device)
-        cfg.mrglik.optim.scl_fct_gamma = observation.view(-1).shape[0]
-
-        path_to_params = os.path.join('/media/chen/Res/dip_bayesian_ext/src/experiments', 
-            'multirun/2021-11-13/15-19-39/0/reconstructor_model_0.pt')
+        path_to_params = os.path.join('/home/rb876/rds/rds-t2-cs133-hh9aMiOkJqI/dip/scripts/outputs/2022-01-21T13:19:34.983951Z/dip_model_0.pt')
         reconstructor.model.load_state_dict(torch.load(path_to_params))
-
         recon = reconstructor.model.forward(filtbackproj)[0]
         
         # estimate the Jacobian
@@ -165,10 +164,10 @@ def coordinator(cfg : DictConfig) -> None:
             example_image.flatten().shape[0]
             )
         
-        (sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3) = \
+        (sweep_exp_tv_block_0, sweep_exp_tv_block_1, sweep_exp_tv_block_2, sweep_exp_tv_block_3, sweep_exp_tv_block_4) = \
              compute_exptected_tv(reconstructor, recon, Jac_x, cfg, False)
 
-        (sweep_exp_tv_block_0_norm, sweep_exp_tv_block_1_norm, sweep_exp_tv_block_2_norm, sweep_exp_tv_block_3_norm) = \
+        (sweep_exp_tv_block_0_norm, sweep_exp_tv_block_1_norm, sweep_exp_tv_block_2_norm, sweep_exp_tv_block_3_norm, sweep_exp_tv_block_4_norm) = \
              compute_exptected_tv(reconstructor, recon, Jac_x, cfg, True)
 
         plot_monotonicity_traces(
@@ -176,12 +175,15 @@ def coordinator(cfg : DictConfig) -> None:
             (sweep_exp_tv_block_0, 
             sweep_exp_tv_block_1, 
             sweep_exp_tv_block_2, 
-            sweep_exp_tv_block_3),
+            sweep_exp_tv_block_3,
+            sweep_exp_tv_block_4),
             (sweep_exp_tv_block_0_norm, 
             sweep_exp_tv_block_1_norm,
             sweep_exp_tv_block_2_norm, 
+            sweep_exp_tv_block_3_norm, 
             sweep_exp_tv_block_3_norm),
-            'linear_monotonicity_scan'
+            'linear_monotonicity_scan',
+            ['$\ell_{0}$---\\texttt{In}', '$\ell_{1}$---\\texttt{Down}', '$\ell_{2}$--- \\texttt{Down}', '$\ell_{3}$ --- \\texttt{Up}', '$\ell_{4}$ --- \\texttt{Up}']
             )
         
         if i == 0: 

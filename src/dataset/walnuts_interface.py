@@ -428,6 +428,21 @@ class WalnutRayTrafo:
                     self.num_proj_rows - 1 -
                     np.argmax(self.proj_mask[::-1], axis=0))
 
+    def get_inds_in_flat_projs_per_angle(self):
+        inds_in_flat_projs_proj_array = np.full(self.proj_shape, -1, dtype=np.int64)
+        inds_in_flat_projs_proj_array[self.proj_mask] = np.arange(self.proj_mask.sum())
+        # inds_in_flat_projs_proj_array contains for each proj entry the index at which
+        # the value is located in a flat_proj (obtained like proj[self.proj_mask])
+        inds_in_flat_projs_per_angle = []
+        single_angle_proj_mask = np.zeros_like(self.proj_mask)
+        for i in range(self.num_angles):
+            single_angle_proj_mask[:, i, :] = self.proj_mask[:, i, :]
+            flat_proj_inds_in_single_angle_mask = inds_in_flat_projs_proj_array[single_angle_proj_mask]
+            single_angle_proj_mask[:, i, :] = 0.
+            inds_in_flat_projs_per_angle.append(inds_in_flat_projs_single_angle)
+
+        return inds_in_flat_projs_per_angle
+
     def assert_proj_rows_suffice(self):
         projs_test_full = np.ones((PROJS_ROWS, self.num_angles, self.num_proj_cols),
                                   dtype=np.float32)

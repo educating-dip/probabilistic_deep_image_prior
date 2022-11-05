@@ -81,7 +81,7 @@ def weights_linearization(cfg, bayesianised_model, filtbackproj, observation, gr
     loss_vec_fd, psnr = [], []
 
     if cfg.mrglik.impl.use_fwAD_for_jvp:
-        fwAD_model, fwAD_module_mapping = get_fwAD_model(reconstructor.model, return_module_mapping=True, use_copy='share_parameters')
+        fwAD_model, fwAD_module_mapping = get_fwAD_model(reconstructor.model, return_module_mapping=True, share_parameters=True)
         fwAD_modules = [fwAD_module_mapping[m] for m in all_modules_under_prior]
 
     reconstructor.model.eval()

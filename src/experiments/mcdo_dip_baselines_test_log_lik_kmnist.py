@@ -19,7 +19,7 @@ from deep_image_prior.utils import PSNR, SSIM, bayesianize_architecture, sample_
 from dataset import extract_trafos_as_matrices
 from scalable_linearised_laplace import (approx_density_from_samples, approx_density_from_samples_mult_normal, approx_kernel_density, 
         approx_predictive_cov_image_block_from_samples, predictive_image_block_log_prob,
-        get_image_block_masks, stabilize_predictive_cov_image_block, stabilize_prior_cov_obs_mat
+        stabilize_predictive_cov_image_block, stabilize_prior_cov_obs_mat
         ) 
 
 @hydra.main(config_path='../cfgs', config_name='config')

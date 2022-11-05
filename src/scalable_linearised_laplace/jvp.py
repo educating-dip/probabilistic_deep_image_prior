@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.autograd.forward_ad as fwAD
+from tqdm import tqdm
 from linearized_laplace import compute_jacobian_single_batch, agregate_flatten_weight_grad
 from scalable_linearised_laplace.batch_ensemble import Conv2dBatchEnsemble
 from scalable_linearised_laplace.fwAD import get_fwAD_model
@@ -179,3 +180,46 @@ def get_weight_block_vec_batch_ensemble(modules):
         assert isinstance(layer, Conv2dBatchEnsemble)
         ws.append(layer.weight.view(layer.num_instances, -1))
     return torch.cat(ws, dim=1)
+
+def get_jac_fwAD(
+    input,
+    fwAD_model,
+    fwAD_modules,
+    return_on_cpu=False,
+    ):
+
+    jac = []
+    ws = get_weight_block_vec(fwAD_modules).clone().detach()
+    ws[:] = 0.
+    for i in range(ws.shape[0]):
+        ws[i] = 1.
+        jacs_i = fwAD_JvP(input, fwAD_model, ws, fwAD_modules).flatten()
+        jac.append(jacs_i.cpu() if return_on_cpu else jacs_i)
+        ws[i] = 0.  # reset
+    return torch.stack(jac, dim=1)
+
+def get_jac_fwAD_batch_ensemble(
+    input,
+    fwAD_be_model,
+    fwAD_be_modules,
+    return_on_cpu=False,
+    ):
+
+    jac = []
+    ws = get_weight_block_vec_batch_ensemble(fwAD_be_modules).clone().detach()
+    vec_batch_size, param_numel = ws.shape
+    ws[:] = 0.
+    for i in tqdm(range(0, param_numel, vec_batch_size), desc='get_jac_fwAD_batch_ensemble', miniters=param_numel//vec_batch_size//100):
+        # set ws.view(vec_batch_size, -1) to be a subset of rows of torch.eye(param_numel); in last batch, it may contain some additional (zero) rows
+        ws.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(1.)
+
+        jacs_batch = fwAD_JvP_batch_ensemble(input, fwAD_be_model, ws, fwAD_be_modules).view(vec_batch_size, -1)
+
+        if i+vec_batch_size > param_numel:  # last batch
+            jacs_batch = jacs_batch[:param_numel%vec_batch_size]
+
+        jac.append(jacs_batch.T.cpu() if return_on_cpu else jacs_batch.T)
+
+        ws.view(vec_batch_size, -1)[:, i:i+vec_batch_size].fill_diagonal_(0.)  # reset
+
+    return torch.cat(jac, dim=1)

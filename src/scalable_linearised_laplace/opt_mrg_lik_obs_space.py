@@ -8,6 +8,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from scalable_linearised_laplace import get_weight_block_vec, compute_approx_log_det_grad, vec_weight_prior_cov_mul, get_diag_prior_cov_obs_mat
 from .mc_pred_cp_loss import set_gp_priors_grad_predcp
+from .low_rank_preconditioner import get_cov_obs_low_rank
 
 def set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads, return_loss=False):
     parameters = (
@@ -36,7 +37,6 @@ def optim_marginal_lik_low_rank(
     observation,
     recon,
     ray_trafos, filtbackproj, bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
-    use_jacobi_vector=True,
     linearized_weights=None, 
     comment=''
     ):
@@ -70,13 +70,30 @@ def optim_marginal_lik_low_rank(
                           {'params': log_noise_model_variance_obs, 'lr': cfg.mrglik.optim.lr}]
                         )
 
-    if use_jacobi_vector:
-        jacobi_vector = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=False).detach()
-        if jacobi_vector.min() < 1:
-            print('clamping jacobi_vector to min value 1')
-            jacobi_vector = jacobi_vector.clamp(min=1)
+    if cfg.mrglik.impl.use_preconditioner:
+        if cfg.mrglik.preconditioner.name == 'jacobi': 
+            preconditioner = get_diag_prior_cov_obs_mat(ray_trafos, filtbackproj, bayesianized_model, hooked_model, log_noise_model_variance_obs, cfg.mrglik.impl.vec_batch_size, replace_by_identity=True).detach()
+            if preconditioner.min() < 1:
+                print('clamping jacobi_vector to min value 1')
+                preconditioner = preconditioner.clamp(min=1)
+        elif cfg.mrglik.preconditioner.name == 'low_rank':
+            reduced_rank_dim = cfg.mrglik.preconditioner.reduced_rank_dim + cfg.mrglik.preconditioner.oversampling_param
+            max_rank_dim = np.prod(ray_trafos['ray_trafo'].range.shape)
+            if reduced_rank_dim > max_rank_dim:
+                reduced_rank_dim = max_rank_dim
+                print('low_rank preconditioner: rank changed to full rank ({:d})'.format(reduced_rank_dim))
+            random_matrix_T = torch.randn(
+                    (reduced_rank_dim, *ray_trafos['ray_trafo'].range.shape),
+                    device=bayesianized_model.store_device
+                    )
+            U, L, inv_cov_obs_approx = get_cov_obs_low_rank(random_matrix_T, ray_trafos, filtbackproj.to(bayesianized_model.store_device),
+                bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
+                log_noise_model_variance_obs.detach(), cfg.mrglik.impl.vec_batch_size, reduced_rank_dim - cfg.mrglik.preconditioner.oversampling_param, cfg.mrglik.preconditioner.oversampling_param, use_fwAD_for_jvp=True)
+            preconditioner = U, L, inv_cov_obs_approx
+        else:
+            raise NotImplementedError
     else:
-        jacobi_vector = None
+        preconditioner = None
 
     with tqdm(range(cfg.mrglik.optim.iterations), desc='mrglik.opt', miniters=cfg.mrglik.optim.iterations//10) as pbar:
         for i in pbar:
@@ -88,14 +105,32 @@ def optim_marginal_lik_low_rank(
             else: 
                 predcp_loss = torch.zeros(1)
 
+            if ((i+1) % cfg.mrglik.preconditioner.update_freq) == 0:
+                if cfg.mrglik.impl.use_preconditioner and cfg.mrglik.preconditioner.name == 'low_rank': 
+                # update preconditioner
+                    preconditioner = get_cov_obs_low_rank(
+                        random_matrix_T, ray_trafos, filtbackproj.to(bayesianized_model.store_device),
+                        bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
+                        log_noise_model_variance_obs.detach(), cfg.mrglik.impl.vec_batch_size, reduced_rank_dim - cfg.mrglik.preconditioner.oversampling_param,
+                        cfg.mrglik.preconditioner.oversampling_param,
+                        use_fwAD_for_jvp=True
+                        )
+
             # update grads for post_hess_log_det
             grads, log_det_term, log_det_grad_cg_mean_residual = compute_approx_log_det_grad(
                     ray_trafos, filtbackproj,
                     bayesianized_model, hooked_model, fwAD_be_model, fwAD_be_modules,
                     log_noise_model_variance_obs,
                     cfg.mrglik.impl.vec_batch_size, side_length=observation_shape,
-                    use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp, jacobi_vector=jacobi_vector,
-                    ignore_numerical_warning=True)
+                    use_fwAD_for_jvp=cfg.mrglik.impl.use_fwAD_for_jvp,
+                    max_cg_iter=cfg.mrglik.cg_impl.max_cg_iter, 
+                    tolerance=cfg.mrglik.cg_impl.tolerance,
+                    name_preconditioner=cfg.mrglik.preconditioner.name, 
+                    preconditioner=preconditioner,
+                    ignore_numerical_warning=True,
+                    estimate_log_det=cfg.mrglik.impl.estimate_log_det,
+                    early_stop_cg_if_not_estimate_log_det=cfg.mrglik.cg_impl.early_stop_if_not_estimate_log_det,
+                    )
             
             set_grads_marginal_lik_log_det(bayesianized_model, log_noise_model_variance_obs, grads)
 
